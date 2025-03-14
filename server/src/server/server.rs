@@ -136,7 +136,7 @@ impl Server {
     }
 
     pub fn start(&mut self) -> &mut Self {
-        println!("Starting server at {}:{}", self.host, self.port);
+        // println!("Starting server at {}:{}", self.host, self.port);
 
         // Create a runtime for our Tokio async code
         let rt = tokio::runtime::Runtime::new().unwrap();
