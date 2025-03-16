@@ -1,3 +1,4 @@
+use core::error;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -5,104 +6,132 @@ use std::sync::Arc;
 use tokio::net::UdpSocket;
 use tokio::sync::Mutex;
 
-/// Position in 3D space
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+/// Represents a 3D position in game world
+///
+/// # Examples
+/// ```rust
+/// let pos = Position { x: 10.0, y: 5.0, z: 2.5 };
+/// ```
 pub struct Position {
     x: f32,
     y: f32,
     z: f32,
 }
 
-/// Rotation in 3D space
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+/// Represents player's rotation/orientation in 3D space
+///
+/// # Examples
+/// ```rust
+/// let rot = Rotation { pitch: 90.0, yaw: 45.0, roll: 0.0 };
+/// ```
 pub struct Rotation {
     pitch: f32,
     yaw: f32,
     roll: f32,
 }
 
-/// Player information
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+/// Defines weapon characteristics for a player
+///
+/// # Examples
+/// ```rust
+/// let weapon = Weapon { damage: 30, fire_rate: 2.5, ammo_count: 15, range: 50.0 };
+/// ```
+pub struct Weapon {
+    damage: u32,
+    fire_rate: f32,
+    ammo_count: u32,
+    range: f32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+/// Represents a connected player with their current state
+///
+/// # Fields
+/// - `username`: Player's display name
+/// - `position`: Current 3D coordinates
+/// - `rotation`: Current orientation
+/// - `health`: Health points (0-100)
+/// - `weapon`: Equipped weapon stats
 pub struct Player {
     username: String,
     position: Position,
     rotation: Rotation,
-    health: u8,
-    is_alive: bool,
+    health: u32,
+    weapon: Weapon,
 }
 
-/// Game state to track players and game state
-#[derive(Debug)]
-struct GameState {
-    players: HashMap<SocketAddr, Player>,
-    is_game_started: bool,
-}
-
-/// Client to Server Messages
 #[derive(Debug, Serialize, Deserialize)]
-enum ClientMessage {
-    /// Join game request with player's username
-    JoinGame { username: String },
-
-    /// Player movement update with position, rotation, and yield flag
+#[serde(tag = "type", content = "data")]
+pub enum ClientMessage {
+    JoinGame {
+        username: String,
+    },
     Move {
         position: Position,
         rotation: Rotation,
-        yield_control: bool,
+        yield_control: f32,
     },
-
-    /// Player shooting action
     Shoot {
+        position: Position,
         direction: Rotation,
         weapon_type: String,
     },
 }
 
-/// Server to Client Messages
-#[derive(Debug, Serialize, Deserialize)]
-enum ServerMessage {
-    /// Notifies clients that the game has started
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type", content = "data")]
+pub enum ServerMessage {
+    Error {
+        message: String,
+    },
     GameStart,
-
-    /// Updates clients about players in the lobby
     PlayersInLobby {
-        player_count: u8,
+        player_count: u32,
         players: Vec<String>,
     },
-
-    /// Broadcasts player movements to all clients
     PlayerMove {
         player_id: String,
         position: Position,
         rotation: Rotation,
-        yield_control: bool,
+        yield_control: f32,
     },
-
-    /// Broadcasts shooting actions to all clients
     PlayerShoot {
         player_id: String,
         position: Position,
         direction: Rotation,
         weapon_type: String,
     },
-
-    /// Notifies when a player dies
     PlayerDeath {
         player_id: String,
         killer_id: Option<String>,
     },
-
-    /// Notifies when a player spawns
     PlayerSpawn {
         player_id: String,
         position: Position,
     },
-
-    /// Updates clients about player health
-    HealthUpdate { player_id: String, health: u8 },
+    HealthUpdate {
+        player_id: String,
+        health: u32,
+    },
 }
 
 #[derive(Debug)]
+pub struct GameState {
+    players: HashMap<SocketAddr, Player>,
+}
+
+#[derive(Debug)]
+/// Main game server handling network communication and game state
+///
+/// # Examples
+/// ```rust
+/// let mut server = Server::new("127.0.0.1", 8080)
+///     .min_players(2)
+///     .max_players(16);
+/// ```
 pub struct Server {
     host: String,
     port: u16,
@@ -112,6 +141,184 @@ pub struct Server {
 }
 
 impl Server {
+    /// Sends a message to a specific player
+    ///
+    /// # Arguments
+    /// * `socket` - Reference to UDP socket
+    /// * `message` - ServerMessage to be serialized and sent
+    /// * `addr` - Player's network address
+    ///
+    /// # Returns
+    /// Result indicating success or failure
+    async fn send_message(
+        &self,
+        socket: &Arc<UdpSocket>,
+        message: ServerMessage,
+        addr: &SocketAddr,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let json = serde_json::to_string(&message)?;
+        log::trace!("Sending message to {}", addr);
+        socket.send_to(json.as_bytes(), addr).await?;
+        Ok(())
+    }
+
+    /// Broadcasts a message to all connected players
+    ///
+    /// # Arguments
+    /// * `socket` - Reference to UDP socket
+    /// * `message` - ServerMessage to be serialized and broadcasted
+    /// * `players` - Map of connected players
+    ///
+    /// # Returns
+    /// Result indicating success or failure
+    async fn broadcast_message(
+        &self,
+        socket: &Arc<UdpSocket>,
+        message: ServerMessage,
+        players: &HashMap<SocketAddr, Player>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        log::trace!("Broadcasting message to {} players", players.len());
+        for client_addr in players.keys() {
+            self.send_message(socket, message.clone(), client_addr)
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// Handles new player joining the game
+    ///
+    /// # Arguments
+    /// * `game_state` - Shared game state
+    /// * `socket` - UDP socket reference
+    /// * `addr` - Client's network address
+    /// * `username` - Player's chosen name
+    ///
+    /// # Returns
+    /// Result indicating success or failure
+    async fn handle_join_game(
+        &self,
+        game_state: Arc<Mutex<GameState>>,
+        socket: Arc<UdpSocket>,
+        addr: SocketAddr,
+        username: String,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut state = game_state.lock().await;
+        let player = Player {
+            username: username.clone(),
+            position: Position {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            rotation: Rotation {
+                pitch: 0.0,
+                yaw: 0.0,
+                roll: 0.0,
+            },
+            health: 100,
+            weapon: Weapon {
+                damage: 10,
+                fire_rate: 1.0,
+                ammo_count: 30,
+                range: 100.0,
+            },
+        };
+        state.players.insert(addr, player);
+        log::info!("New player connection: {} from {}", username, addr);
+
+        let response = ServerMessage::PlayersInLobby {
+            player_count: state.players.len() as u32,
+            players: state.players.values().map(|p| p.username.clone()).collect(),
+        };
+        let json = serde_json::to_string(&response)?;
+        socket.send_to(json.as_bytes(), &addr).await?;
+        Ok(())
+    }
+
+    /// Processes player movement updates
+    ///
+    /// # Arguments
+    /// * `game_state` - Shared game state
+    /// * `socket` - UDP socket reference
+    /// * `addr` - Client's network address
+    /// * `position` - New 3D position
+    /// * `rotation` - New orientation
+    /// * `yield_control` - Movement control value
+    ///
+    /// # Returns
+    /// Result indicating success or failure
+    async fn handle_move(
+        &self,
+        game_state: Arc<Mutex<GameState>>,
+        socket: Arc<UdpSocket>,
+        addr: SocketAddr,
+        position: Position,
+        rotation: Rotation,
+        yield_control: f32,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut state = game_state.lock().await;
+        if let Some(player) = state.players.get_mut(&addr) {
+            player.position = position;
+            player.rotation = rotation;
+            log::debug!(
+                "Player {} moved to {:?} facing {:?}",
+                player.username,
+                position,
+                rotation
+            );
+
+            let response = ServerMessage::PlayerMove {
+                player_id: player.username.clone(),
+                position: player.position,
+                rotation: player.rotation,
+                yield_control,
+            };
+            self.broadcast_message(&socket, response, &state.players)
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// Processes player shooting actions
+    ///
+    /// # Arguments
+    /// * `game_state` - Shared game state
+    /// * `socket` - UDP socket reference
+    /// * `addr` - Client's network address
+    /// * `position` - Shot origin position
+    /// * `direction` - Shooting direction
+    /// * `weapon_type` - Weapon identifier string
+    ///
+    /// # Returns
+    /// Result indicating success or failure
+    async fn handle_shoot(
+        &self,
+        game_state: Arc<Mutex<GameState>>,
+        socket: Arc<UdpSocket>,
+        addr: SocketAddr,
+        position: Position,
+        direction: Rotation,
+        weapon_type: String,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let state = game_state.lock().await;
+        if let Some(player) = state.players.get(&addr) {
+            log::debug!(
+                "Player {} fired {} weapon from {:?}",
+                player.username,
+                weapon_type,
+                position
+            );
+            let response = ServerMessage::PlayerShoot {
+                player_id: player.username.clone(),
+                position,
+                direction,
+                weapon_type,
+            };
+            self.broadcast_message(&socket, response, &state.players)
+                .await?;
+        }
+        Ok(())
+    }
     pub fn new<S: Into<String>>(host: S, port: u16) -> Server {
         Server {
             host: host.into(),
@@ -120,365 +327,115 @@ impl Server {
             max_players: 10,
             game_state: Arc::new(Mutex::new(GameState {
                 players: HashMap::new(),
-                is_game_started: false,
             })),
         }
     }
 
+    /// Sets minimum required players to start a match
+    ///
+    /// # Arguments
+    /// * `min` - Minimum players (1-255)
+    ///
+    /// # Returns
+    /// Mutable Self for method chaining
     pub fn min_players(&mut self, min: u8) -> &mut Self {
         self.min_players = min;
         self
     }
 
+    /// Sets maximum allowed players in a match
+    ///
+    /// # Arguments
+    /// * `max` - Maximum players (1-255)
+    ///
+    /// # Returns
+    /// Mutable Self for method chaining
     pub fn max_players(&mut self, max: u8) -> &mut Self {
         self.max_players = max;
         self
     }
 
-    pub fn start(&mut self) -> &mut Self {
-        // println!("Starting server at {}:{}", self.host, self.port);
+    /// Starts the game server and begins listening for UDP packets
+    ///
+    /// # Returns
+    /// Result indicating success or failure
+    ///
+    /// # Examples
+    /// ```rust
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let mut server = Server::new("0.0.0.0", 8080);
+    ///     server.start().await?;
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn start(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let addr = format!("{}:{}", self.host, self.port);
+        let socket = UdpSocket::bind(&addr).await?;
+        log::info!("Server started on {}", addr);
 
-        // Create a runtime for our Tokio async code
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let socket = Arc::new(socket);
         let game_state = self.game_state.clone();
-        let host = self.host.clone();
-        let port = self.port;
-        let min_players = self.min_players;
-        let max_players = self.max_players;
 
-        // Spawn the UDP server in a background task
-        rt.spawn(async move {
-            if let Err(e) = run_udp_server(host, port, min_players, max_players, game_state).await {
-                eprintln!("Server error: {}", e);
+        let mut buf = vec![0u8; 1024];
+        loop {
+            log::trace!("Waiting for incoming packets...");
+            let (len, addr) = socket.recv_from(&mut buf).await?;
+            let message = String::from_utf8_lossy(&buf[..len]);
+
+            log::trace!("Received message from {}: {}", addr, message);
+
+            let client_message = serde_json::from_str::<ClientMessage>(&message);
+
+            if let Err(e) = client_message {
+                log::warn!("Failed to parse client message: {}", e);
+
+                let error_message = ServerMessage::Error {
+                    message: format!("Bad Payload: {}", e),
+                };
+
+                self.send_message(&socket, error_message, &addr).await?;
+                continue;
             }
-        });
 
-        self
-    }
-}
+            let client_message = client_message.unwrap();
 
-/// Main UDP server function
-async fn run_udp_server(
-    host: String,
-    port: u16,
-    min_players: u8,
-    max_players: u8,
-    game_state: Arc<Mutex<GameState>>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // Bind the UDP socket
-    let socket_addr = format!("{}:{}", host, port);
-    let socket = UdpSocket::bind(&socket_addr).await?;
-    let socket = Arc::new(socket);
-
-    println!("UDP server listening on {}", socket_addr);
-
-    // Buffer for incoming messages
-    let mut buf = [0u8; 1024];
-
-    // Main server loop
-    loop {
-        let (size, client_addr) = socket.recv_from(&mut buf).await?;
-
-        // Process the received message
-        if let Ok(message) = bincode::deserialize::<ClientMessage>(&buf[..size]) {
-            println!("Received message from {}: {:?}", client_addr, message);
-
-            match message {
+            match client_message {
                 ClientMessage::JoinGame { username } => {
-                    handle_join_game(
-                        socket.clone(),
-                        client_addr,
-                        username,
-                        game_state.clone(),
-                        max_players,
-                    )
-                    .await?;
+                    self.handle_join_game(game_state.clone(), socket.clone(), addr, username)
+                        .await?;
                 }
                 ClientMessage::Move {
                     position,
                     rotation,
                     yield_control,
                 } => {
-                    handle_move(
+                    self.handle_move(
+                        game_state.clone(),
                         socket.clone(),
-                        client_addr,
+                        addr,
                         position,
                         rotation,
                         yield_control,
-                        game_state.clone(),
                     )
                     .await?;
                 }
                 ClientMessage::Shoot {
+                    position,
                     direction,
                     weapon_type,
                 } => {
-                    handle_shoot(
+                    self.handle_shoot(
+                        game_state.clone(),
                         socket.clone(),
-                        client_addr,
+                        addr,
+                        position,
                         direction,
                         weapon_type,
-                        game_state.clone(),
                     )
                     .await?;
                 }
             }
-
-            // Check if the game should start
-            let should_start_game = {
-                let state = game_state.lock().await;
-                !state.is_game_started && state.players.len() >= min_players as usize
-            };
-
-            if should_start_game {
-                start_game(socket.clone(), game_state.clone()).await?;
-            }
         }
     }
-}
-
-/// Handle join game request
-async fn handle_join_game(
-    socket: Arc<UdpSocket>,
-    client_addr: SocketAddr,
-    username: String,
-    game_state: Arc<Mutex<GameState>>,
-    max_players: u8,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut state = game_state.lock().await;
-
-    // Check if the game is already full
-    if state.players.len() >= max_players as usize {
-        // Send rejection message (would need to be implemented)
-        return Ok(());
-    }
-
-    // Create a new player
-    let player = Player {
-        username: username.clone(),
-        position: Position {
-            x: 0.0,
-            y: 0.0,
-            z: 0.0,
-        },
-        rotation: Rotation {
-            pitch: 0.0,
-            yaw: 0.0,
-            roll: 0.0,
-        },
-        health: 100,
-        is_alive: true,
-    };
-
-    // Add player to the game
-    state.players.insert(client_addr, player);
-
-    // Get list of players for lobby update
-    let player_count = state.players.len() as u8;
-    let players: Vec<String> = state.players.values().map(|p| p.username.clone()).collect();
-
-    // Drop the lock before sending messages
-    drop(state);
-
-    // Send players in lobby update to all players
-    broadcast_to_all(
-        &socket,
-        &ServerMessage::PlayersInLobby {
-            player_count,
-            players,
-        },
-        game_state,
-    )
-    .await?;
-
-    Ok(())
-}
-
-/// Handle player movement
-async fn handle_move(
-    socket: Arc<UdpSocket>,
-    client_addr: SocketAddr,
-    position: Position,
-    rotation: Rotation,
-    yield_control: bool,
-    game_state: Arc<Mutex<GameState>>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut state = game_state.lock().await;
-
-    // Update player position if they exist
-    if let Some(player) = state.players.get_mut(&client_addr) {
-        player.position = position;
-        player.rotation = rotation;
-
-        // Get player ID
-        let player_id = player.username.clone();
-
-        // Drop the lock before sending messages
-        drop(state);
-
-        // Broadcast move to all players
-        broadcast_to_all(
-            &socket,
-            &ServerMessage::PlayerMove {
-                player_id,
-                position,
-                rotation,
-                yield_control,
-            },
-            game_state,
-        )
-        .await?;
-    }
-
-    Ok(())
-}
-
-/// Handle shooting action
-async fn handle_shoot(
-    socket: Arc<UdpSocket>,
-    client_addr: SocketAddr,
-    direction: Rotation,
-    weapon_type: String,
-    game_state: Arc<Mutex<GameState>>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let state = game_state.lock().await;
-
-    // Process shooting only if player exists
-    if let Some(player) = state.players.get(&client_addr) {
-        let player_id = player.username.clone();
-        let position = player.position;
-
-        // Drop the lock before sending messages
-        drop(state);
-
-        // Broadcast shoot to all players
-        broadcast_to_all(
-            &socket,
-            &ServerMessage::PlayerShoot {
-                player_id,
-                position,
-                direction,
-                weapon_type,
-            },
-            game_state,
-        )
-        .await?;
-
-        // In a real game, we'd also calculate hit detection here
-        // and send PlayerDeath and HealthUpdate messages as needed
-    }
-
-    Ok(())
-}
-
-/// Start the game when minimum player count is reached
-async fn start_game(
-    socket: Arc<UdpSocket>,
-    game_state: Arc<Mutex<GameState>>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut state = game_state.lock().await;
-
-    if state.is_game_started {
-        return Ok(());
-    }
-
-    state.is_game_started = true;
-    let player_ids: Vec<(String, Position)> = state
-        .players
-        .values()
-        .map(|p| (p.username.clone(), p.position))
-        .collect();
-
-    // Drop the lock before sending messages
-    drop(state);
-
-    // Notify all clients that the game has started
-    broadcast_to_all(&socket, &ServerMessage::GameStart, game_state.clone()).await?;
-
-    // Spawn all players at their positions
-    for (player_id, position) in player_ids {
-        broadcast_to_all(
-            &socket,
-            &ServerMessage::PlayerSpawn {
-                player_id,
-                position,
-            },
-            game_state.clone(),
-        )
-        .await?;
-    }
-
-    Ok(())
-}
-
-/// Broadcast a message to all connected players
-async fn broadcast_to_all(
-    socket: &Arc<UdpSocket>,
-    message: &ServerMessage,
-    game_state: Arc<Mutex<GameState>>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let encoded = bincode::serialize(message)?;
-    let state = game_state.lock().await;
-
-    for client_addr in state.players.keys() {
-        socket.send_to(&encoded, client_addr).await?;
-    }
-
-    Ok(())
-}
-
-/// Update player health and handle death if needed
-async fn update_player_health(
-    socket: Arc<UdpSocket>,
-    player_id: String,
-    new_health: u8,
-    game_state: Arc<Mutex<GameState>>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut state = game_state.lock().await;
-    let mut player_died = false;
-    let mut player_addr = None;
-
-    // Find and update the player's health
-    for (addr, player) in state.players.iter_mut() {
-        if player.username == player_id {
-            player.health = new_health;
-
-            // Check if player died from this health change
-            if new_health == 0 && player.is_alive {
-                player.is_alive = false;
-                player_died = true;
-                player_addr = Some(*addr);
-            }
-            break;
-        }
-    }
-
-    // Drop the lock before sending messages
-    drop(state);
-
-    // Broadcast health update
-    broadcast_to_all(
-        &socket,
-        &ServerMessage::HealthUpdate {
-            player_id: player_id.clone(),
-            health: new_health,
-        },
-        game_state.clone(),
-    )
-    .await?;
-
-    // Handle player death if needed
-    if player_died {
-        broadcast_to_all(
-            &socket,
-            &ServerMessage::PlayerDeath {
-                player_id,
-                killer_id: None, // In a real game, you'd track the killer
-            },
-            game_state,
-        )
-        .await?;
-    }
-
-    Ok(())
 }
