@@ -1,7 +1,7 @@
 import socket
 
 def send_ping():
-    message = r'{"type": "Ping"}'
+    message = r'{"type": "JoinGame", "data": {"username": "test"}}'
     server_address = ('0.0.0.0', 2025)
 
     # Create a UDP socket
