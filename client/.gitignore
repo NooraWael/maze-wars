@@ -1,0 +1,23 @@
+# Rust specific
+target/
+**/*.rs.bk
+
+# Dependencies
+/Cargo.lock
+
+# Build artifacts
+/target/
+
+# Generated files
+*.rs.bk
+*.log
+
+# IDEs and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+
+# Other
+.DS_Store
