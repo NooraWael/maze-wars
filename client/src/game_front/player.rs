@@ -1,5 +1,5 @@
-use bevy::prelude::*;
 use bevy::input::mouse::MouseMotion;
+use bevy::prelude::*;
 
 // Player component
 #[derive(Component)]
@@ -15,9 +15,7 @@ pub struct CameraSensitivity {
 
 impl Default for CameraSensitivity {
     fn default() -> Self {
-        Self {
-            horizontal: 0.003,
-        }
+        Self { horizontal: 0.003 }
     }
 }
 
@@ -26,22 +24,23 @@ pub fn spawn_player(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
-) {
+) -> Entity {
     // Player entity
-    commands.spawn((
-        Player { speed: 5.0 },
-        CameraSensitivity::default(),
-        Mesh3d(meshes.add(Sphere::new(0.5))),
-        MeshMaterial3d(materials.add(Color::srgb_u8(255, 100, 100))),
-        Transform::from_xyz(0.0, 0.5, 0.0),
-    ))
-    .with_children(|parent| {
-    
-        parent.spawn((
-            Camera3d::default(),
-            Transform::from_xyz(0.0, 1.5, 5.0).looking_at(Vec3::new(0.0, 1.0, -1.0), Vec3::Y),
-        ));
-    });
+    commands
+        .spawn((
+            Player { speed: 5.0 },
+            CameraSensitivity::default(),
+            Mesh3d(meshes.add(Sphere::new(0.5))),
+            MeshMaterial3d(materials.add(Color::srgb_u8(255, 100, 100))),
+            Transform::from_xyz(0.0, 0.5, 0.0),
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                Camera3d::default(),
+                Transform::from_xyz(0.0, 1.5, 5.0).looking_at(Vec3::new(0.0, 1.0, -1.0), Vec3::Y),
+            ));
+        })
+        .id()
 }
 
 //i stole this from bevy website
@@ -52,22 +51,22 @@ pub fn player_look(
 ) {
     if let Ok((sensitivity, mut transform)) = query.get_single_mut() {
         let mut delta = Vec2::ZERO;
-        
+
         // Accumulate all mouse motion this frame
         for ev in motion_evr.read() {
             delta += ev.delta;
         }
-        
+
         if delta != Vec2::ZERO {
             // Only apply rotation around Y-axis (yaw)
             let delta_yaw = -delta.x * sensitivity.horizontal;
-            
+
             // Get current rotation
             let (mut yaw, pitch, roll) = transform.rotation.to_euler(EulerRot::YXZ);
-            
+
             // Apply only yaw changes
             yaw += delta_yaw;
-            
+
             // Update rotation (pitch remains unchanged)
             transform.rotation = Quat::from_euler(EulerRot::YXZ, yaw, pitch, roll);
         }
@@ -82,7 +81,7 @@ pub fn player_movement(
 ) {
     if let Ok((player, mut transform)) = query.get_single_mut() {
         let mut movement = Vec3::ZERO;
-        
+
         // Forward/backward
         if keyboard_input.pressed(KeyCode::KeyW) || keyboard_input.pressed(KeyCode::ArrowUp) {
             movement.z -= 1.0;
@@ -90,7 +89,7 @@ pub fn player_movement(
         if keyboard_input.pressed(KeyCode::KeyS) || keyboard_input.pressed(KeyCode::ArrowDown) {
             movement.z += 1.0;
         }
-        
+
         // Left/right
         if keyboard_input.pressed(KeyCode::KeyA) || keyboard_input.pressed(KeyCode::ArrowLeft) {
             movement.x -= 1.0;
@@ -98,24 +97,24 @@ pub fn player_movement(
         if keyboard_input.pressed(KeyCode::KeyD) || keyboard_input.pressed(KeyCode::ArrowRight) {
             movement.x += 1.0;
         }
-        
+
         // Only apply movement if there's input
         if movement != Vec3::ZERO {
             // Normalize to prevent faster diagonal movement
             movement = movement.normalize();
-            
+
             // Convert movement direction from local space to world space
             // This makes movement relative to where the player is looking
             let forward = transform.forward();
             let right = transform.right();
-            
+
             // Keep movement on the xz plane
             let forward = Vec3::new(forward.x, 0.0, forward.z).normalize_or_zero();
             let right = Vec3::new(right.x, 0.0, right.z).normalize_or_zero();
-            
+
             // Calculate final movement direction
             let direction = forward * -movement.z + right * movement.x;
-            
+
             // Apply movement
             transform.translation += direction * player.speed * time.delta_secs();
         }
