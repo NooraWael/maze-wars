@@ -11,14 +11,12 @@ pub struct Player {
 #[derive(Component)]
 pub struct CameraSensitivity {
     pub horizontal: f32,
-    pub vertical: f32,
 }
 
 impl Default for CameraSensitivity {
     fn default() -> Self {
         Self {
             horizontal: 0.003,
-            vertical: 0.002,
         }
     }
 }
@@ -41,7 +39,7 @@ pub fn spawn_player(
     
         parent.spawn((
             Camera3d::default(),
-            Transform::from_xyz(0.0, 4.0, 8.0).looking_at(Vec3::new(0.0, 0.5, -4.0), Vec3::Y),
+            Transform::from_xyz(0.0, 1.5, 5.0).looking_at(Vec3::new(0.0, 1.0, -1.0), Vec3::Y),
         ));
     });
 }
@@ -61,22 +59,16 @@ pub fn player_look(
         }
         
         if delta != Vec2::ZERO {
-            // Rotation around Y-axis (yaw)
+            // Only apply rotation around Y-axis (yaw)
             let delta_yaw = -delta.x * sensitivity.horizontal;
-            // Rotation around X-axis (pitch)
-            let delta_pitch = -delta.y * sensitivity.vertical;
             
             // Get current rotation
-            let (mut yaw, mut pitch, roll) = transform.rotation.to_euler(EulerRot::YXZ);
+            let (mut yaw, pitch, roll) = transform.rotation.to_euler(EulerRot::YXZ);
             
-            // Apply rotation changes
+            // Apply only yaw changes
             yaw += delta_yaw;
             
-            // Clamp pitch to avoid gimbal lock (looking straight up or down)
-            const PITCH_LIMIT: f32 = std::f32::consts::FRAC_PI_2 - 0.01;
-            pitch = (pitch + delta_pitch).clamp(-PITCH_LIMIT, PITCH_LIMIT);
-            
-            // Update rotation
+            // Update rotation (pitch remains unchanged)
             transform.rotation = Quat::from_euler(EulerRot::YXZ, yaw, pitch, roll);
         }
     }
