@@ -37,6 +37,10 @@ pub fn spawn_player(
         .with_children(|parent| {
             parent.spawn((
                 Camera3d::default(),
+                Camera {
+                    order: 0, 
+                    ..default()
+                },
                 Transform::from_xyz(0.0, 1.5, 5.0).looking_at(Vec3::new(0.0, 1.0, -1.0), Vec3::Y),
             ));
         })

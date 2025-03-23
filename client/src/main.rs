@@ -1,10 +1,27 @@
 use bevy::{prelude::*, render::camera::Viewport, window::WindowResized};
 
 mod game_front;
+mod menu;         
+mod network {     
+    pub mod network;  
+}
+mod game_setup;  
+mod player_network; 
+
+use menu::MenuPlugin;
+use network::network::NetworkPlugin;
+use crate::game_setup::game_setup::GameSetupPlugin;
+use crate::player_network::player_network::PlayerNetworkPlugin;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .add_plugins((
+            MenuPlugin, 
+            NetworkPlugin, 
+            GameSetupPlugin,
+            PlayerNetworkPlugin,
+        ))
         .add_systems(Startup, setup)
         .add_systems(PostStartup, tag_player_camera)
         .add_systems(
@@ -13,78 +30,47 @@ fn main() {
                 game_front::player::player_look,
                 game_front::player::player_movement,
                 game_front::world::wall_collision_system,
-                game_front::laser::player_shoot,       // New shooting system
-                game_front::laser::update_lasers,      // New laser update system
+                game_front::laser::player_shoot,
+                game_front::laser::update_lasers,
                 update_camera_viewports,
                 update_minimap_camera,
-            ),
+            )
+            .run_if(in_state(menu::GameState::InGame)),
         )
         .run();
 }
 
-// Components for our cameras
 #[derive(Component)]
 struct MainCamera;
 
 #[derive(Component)]
 struct MinimapCamera;
 
-// Resource to store the player entity for the tagging system
+
 #[derive(Resource)]
 struct PlayerEntityResource(Entity);
 
-// Set up the scene with world, player, and light
+
 fn setup(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    game_front::world::create_world(&mut commands, &mut meshes, &mut materials);
 
-    let player_entity =
-        game_front::player::spawn_player(&mut commands, &mut meshes, &mut materials);
-
-    commands.insert_resource(PlayerEntityResource(player_entity));
-
-    // Create minimap camera (top-down view - higher angle)
-    commands.spawn((
-        Camera3d::default(),
-        Camera {
-            order: 1, // Higher order means it renders on top
-            ..default()
-        },
-        MinimapCamera,
-        Transform::from_xyz(0.0, 145.0, 0.0).looking_at(Vec3::ZERO, Vec3::Z),
-    ));
-
-    // Directional light (sun)
-    commands.spawn((
-        DirectionalLight {
-            color: Color::srgb(0.98, 0.95, 0.82),
-            shadows_enabled: true,
-            illuminance: 10000.0,
-            ..default()
-        },
-        Transform::from_xyz(0.0, 10.0, 0.0).looking_at(Vec3::new(-0.15, -0.5, 0.25), Vec3::Y),
-    ));
-
-    // Ambient light
-    commands.insert_resource(AmbientLight {
-        color: Color::WHITE,
-        brightness: 0.2,
-    });
+    info!("Application starting...");
 }
 
 // System to find and tag the player's camera
 fn tag_player_camera(
     mut commands: Commands,
-    player_entity: Res<PlayerEntityResource>,
+    player_entity: Option<Res<PlayerEntityResource>>,
     camera_query: Query<(Entity, &Parent), With<Camera3d>>,
 ) {
-    for (camera_entity, parent) in camera_query.iter() {
-        if parent.get() == player_entity.0 {
-            commands.entity(camera_entity).insert(MainCamera);
-            break;
+    // Only proceed if we have a player entity
+    if let Some(player_entity) = player_entity {
+        for (camera_entity, parent) in camera_query.iter() {
+            if parent.get() == player_entity.0 {
+                commands.entity(camera_entity).insert(MainCamera);
+                break;
+            }
         }
     }
 }
