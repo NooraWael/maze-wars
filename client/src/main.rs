@@ -13,6 +13,8 @@ fn main() {
                 game_front::player::player_look,
                 game_front::player::player_movement,
                 game_front::world::wall_collision_system,
+                game_front::laser::player_shoot,       // New shooting system
+                game_front::laser::update_lasers,      // New laser update system
                 update_camera_viewports,
                 update_minimap_camera,
             ),
@@ -120,7 +122,7 @@ fn update_camera_viewports(
     }
 }
 
-// System to update the minimap camera position to follow the player - might remove 
+// System to update the minimap camera position to follow the player
 fn update_minimap_camera(
     player_query: Query<&Transform, (With<game_front::player::Player>, Without<MinimapCamera>)>,
     mut minimap_camera: Query<&mut Transform, With<MinimapCamera>>,
