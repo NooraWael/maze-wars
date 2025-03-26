@@ -1,122 +1,16 @@
-use core::error;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::UdpSocket;
 use tokio::sync::Mutex;
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
-/// Represents a 3D position in game world
-///
-/// # Examples
-/// ```rust
-/// let pos = Position { x: 10.0, y: 5.0, z: 2.5 };
-/// ```
-pub struct Position {
-    x: f32,
-    y: f32,
-    z: f32,
-}
+use crate::player::Player;
+use crate::position::Position;
+use crate::rotation::Rotation;
+use crate::server::client_messages::ClientMessage;
+use crate::weapon::Weapon;
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
-/// Represents player's rotation/orientation in 3D space
-///
-/// # Examples
-/// ```rust
-/// let rot = Rotation { pitch: 90.0, yaw: 45.0, roll: 0.0 };
-/// ```
-pub struct Rotation {
-    pitch: f32,
-    yaw: f32,
-    roll: f32,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
-/// Defines weapon characteristics for a player
-///
-/// # Examples
-/// ```rust
-/// let weapon = Weapon { damage: 30, fire_rate: 2.5, ammo_count: 15, range: 50.0 };
-/// ```
-pub struct Weapon {
-    damage: u32,
-    fire_rate: f32,
-    ammo_count: u32,
-    range: f32,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-/// Represents a connected player with their current state
-///
-/// # Fields
-/// - `username`: Player's display name
-/// - `position`: Current 3D coordinates
-/// - `rotation`: Current orientation
-/// - `health`: Health points (0-100)
-/// - `weapon`: Equipped weapon stats
-pub struct Player {
-    username: String,
-    position: Position,
-    rotation: Rotation,
-    health: u32,
-    weapon: Weapon,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "type", content = "data")]
-pub enum ClientMessage {
-    JoinGame {
-        username: String,
-    },
-    Move {
-        position: Position,
-        rotation: Rotation,
-        yield_control: f32,
-    },
-    Shoot {
-        position: Position,
-        direction: Rotation,
-        weapon_type: String,
-    },
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(tag = "type", content = "data")]
-pub enum ServerMessage {
-    Error {
-        message: String,
-    },
-    GameStart,
-    PlayersInLobby {
-        player_count: u32,
-        players: Vec<String>,
-    },
-    PlayerMove {
-        player_id: String,
-        position: Position,
-        rotation: Rotation,
-        yield_control: f32,
-    },
-    PlayerShoot {
-        player_id: String,
-        position: Position,
-        direction: Rotation,
-        weapon_type: String,
-    },
-    PlayerDeath {
-        player_id: String,
-        killer_id: Option<String>,
-    },
-    PlayerSpawn {
-        player_id: String,
-        position: Position,
-    },
-    HealthUpdate {
-        player_id: String,
-        health: u32,
-    },
-}
+use super::ServerMessage;
 
 #[derive(Debug)]
 pub struct GameState {
@@ -203,26 +97,13 @@ impl Server {
         username: String,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut state = game_state.lock().await;
-        let player = Player {
-            username: username.clone(),
-            position: Position {
-                x: 0.0,
-                y: 0.0,
-                z: 0.0,
-            },
-            rotation: Rotation {
-                pitch: 0.0,
-                yaw: 0.0,
-                roll: 0.0,
-            },
-            health: 100,
-            weapon: Weapon {
-                damage: 10,
-                fire_rate: 1.0,
-                ammo_count: 30,
-                range: 100.0,
-            },
-        };
+        let player = Player::new(
+            username.clone(),
+            Default::default(),
+            Default::default(),
+            100,
+            Weapon::pistol(),
+        );
         state.players.insert(addr, player);
         log::info!("New player connection: {} from {}", username, addr);
 

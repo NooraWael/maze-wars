@@ -1,4 +1,8 @@
+mod player;
+mod position;
+mod rotation;
 mod server;
+mod weapon;
 
 use chrono::Local;
 use colored::*;
