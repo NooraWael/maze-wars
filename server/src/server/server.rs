@@ -53,6 +53,25 @@ impl Server {
         username: String,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut state = game_state.lock().await;
+
+        // Check if the player with the same name already exists
+        if state.players.values().any(|p| p.username == username) {
+            let error_message = ServerMessage::JoinGameError {
+                message: "Username already taken".to_string(),
+            };
+            self.send_message(&socket, error_message, &addr).await?;
+            return Ok(());
+        }
+
+        // Check if the player limit is reached
+        if state.players.len() >= self.max_players as usize {
+            let error_message = ServerMessage::JoinGameError {
+                message: "Server is full".to_string(),
+            };
+            self.send_message(&socket, error_message, &addr).await?;
+            return Ok(());
+        }
+
         let player = Player::new(
             username.clone(),
             Default::default(),
@@ -67,8 +86,9 @@ impl Server {
             player_count: state.players.len() as u32,
             players: state.players.values().map(|p| p.username.clone()).collect(),
         };
-        let json = serde_json::to_string(&response)?;
-        socket.send_to(json.as_bytes(), &addr).await?;
+
+        self.broadcast_message(&socket, response, &state.players)
+            .await?;
         Ok(())
     }
 

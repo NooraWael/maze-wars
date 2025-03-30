@@ -8,6 +8,9 @@ pub enum ServerMessage {
     Error {
         message: String,
     },
+    JoinGameError {
+        message: String,
+    },
     GameStart,
     PlayersInLobby {
         player_count: u32,
