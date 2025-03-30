@@ -1,4 +1,6 @@
 mod client_messages;
+mod game_state;
+mod message_handlers;
 mod message_helpers;
 mod server_messages;
 
