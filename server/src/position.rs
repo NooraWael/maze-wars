@@ -33,10 +33,6 @@ impl Position {
 impl Default for Position {
     /// Provides a default `Position` instance with all coordinates set to `0.0`.
     fn default() -> Self {
-        Self {
-            x: 0.0,
-            y: 0.0,
-            z: 0.0,
-        }
+        Self::new(0., 0., 0.)
     }
 }

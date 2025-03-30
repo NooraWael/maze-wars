@@ -27,25 +27,25 @@ impl Weapon {
         }
     }
 
-    /// Returns a predefined rifle weapon
-    pub fn rifle() -> Self {
-        Weapon {
-            name: String::from("Rifle"),
-            damage: 40,
-            fire_rate: 3.0,
-            ammo_count: 30,
-            range: 60.0,
-        }
-    }
+    // /// Returns a predefined rifle weapon
+    // pub fn rifle() -> Self {
+    //     Weapon {
+    //         name: String::from("Rifle"),
+    //         damage: 40,
+    //         fire_rate: 3.0,
+    //         ammo_count: 30,
+    //         range: 60.0,
+    //     }
+    // }
 
-    /// Returns a predefined sniper weapon
-    pub fn sniper() -> Self {
-        Weapon {
-            name: String::from("Sniper"),
-            damage: 90,
-            fire_rate: 0.8,
-            ammo_count: 5,
-            range: 100.0,
-        }
-    }
+    // /// Returns a predefined sniper weapon
+    // pub fn sniper() -> Self {
+    //     Weapon {
+    //         name: String::from("Sniper"),
+    //         damage: 90,
+    //         fire_rate: 0.8,
+    //         ammo_count: 5,
+    //         range: 100.0,
+    //     }
+    // }
 }

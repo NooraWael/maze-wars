@@ -23,10 +23,6 @@ impl Rotation {
 impl Default for Rotation {
     /// Returns a default `Rotation` with all values set to 0.0.
     fn default() -> Self {
-        Self {
-            pitch: 0.0,
-            yaw: 0.0,
-            roll: 0.0,
-        }
+        Self::new(0.0, 0.0, 0.0)
     }
 }
