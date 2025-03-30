@@ -11,11 +11,11 @@ pub enum ServerMessage {
     JoinGameError {
         message: String,
     },
-    GameStart,
     PlayersInLobby {
         player_count: u32,
         players: Vec<String>,
     },
+    GameStart,
     PlayerMove {
         player_id: String,
         position: Position,
