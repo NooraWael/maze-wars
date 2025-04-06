@@ -50,6 +50,7 @@ impl Server {
         let player = Player::new(
             username.clone(),
             Default::default(),
+            Player::DEFAULT_HEIGHT,
             Default::default(),
             100,
             Weapon::pistol(),

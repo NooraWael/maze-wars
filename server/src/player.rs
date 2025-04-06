@@ -8,18 +8,22 @@ use crate::{position::Position, rotation::Rotation, weapon::Weapon};
 /// # Fields
 /// - `username`: Player's display name
 /// - `position`: Current 3D coordinates
+/// - `height`: Player's height in centimeters
 /// - `rotation`: Current orientation
 /// - `health`: Health points (0-100)
 /// - `weapon`: Equipped weapon stats
 pub struct Player {
     pub username: String,
     pub position: Position,
+    pub height: u32,
     pub rotation: Rotation,
     pub health: u32,
     pub weapon: Weapon,
 }
 
 impl Player {
+    pub const DEFAULT_HEIGHT: u32 = 180; // Default height in cm
+
     /// Creates a new `Player` instance
     ///
     /// # Arguments
@@ -34,6 +38,7 @@ impl Player {
     pub fn new(
         username: String,
         position: Position,
+        height: u32,
         rotation: Rotation,
         health: u32,
         weapon: Weapon,
@@ -41,6 +46,7 @@ impl Player {
         Self {
             username,
             position,
+            height,
             rotation,
             health,
             weapon,
