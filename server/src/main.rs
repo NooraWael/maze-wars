@@ -46,7 +46,7 @@ impl log::Log for ColoredLogger {
 #[tokio::main]
 async fn main() {
     log::set_logger(&ColoredLogger)
-        .map(|()| log::set_max_level(LevelFilter::Trace))
+        .map(|()| log::set_max_level(LevelFilter::Debug))
         .unwrap();
 
     if let Err(e) = Server::new("0.0.0.0", 2025)

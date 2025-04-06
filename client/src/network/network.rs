@@ -15,25 +15,31 @@ impl Plugin for NetworkPlugin {
             .init_resource::<OutgoingMessages>()
             .init_resource::<IncomingMessages>()
             .add_event::<NetworkEvent>()
-            .add_systems(Update, (
-                process_outgoing_messages,
-                process_incoming_messages,
-                handle_network_events,
-            ));
+            .add_systems(
+                Update,
+                (
+                    process_outgoing_messages,
+                    process_incoming_messages,
+                    handle_network_events,
+                ),
+            );
     }
 }
 
 // Client messages to send to the server
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type", content = "data")]
 pub enum ClientMessage {
-    JoinGame { username: String },
-    Move { 
-        position: Position, 
+    JoinGame {
+        username: String,
+    },
+    Move {
+        position: Position,
         rotation: Rotation,
         yield_control: f32,
     },
-    Shoot { 
-        position: Position, 
+    Shoot {
+        position: Position,
         direction: Rotation,
         weapon_type: String,
     },
@@ -41,36 +47,39 @@ pub enum ClientMessage {
 
 // Messages received from the server
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type", content = "data")]
 pub enum ServerMessage {
-    Error { message: String },
-    GameStart,
-    PlayersInLobby { 
-        player_count: u32, 
-        players: Vec<String> 
+    Error {
+        message: String,
     },
-    PlayerMove { 
-        player_id: String, 
-        position: Position, 
+    GameStart,
+    PlayersInLobby {
+        player_count: u32,
+        players: Vec<String>,
+    },
+    PlayerMove {
+        player_id: String,
+        position: Position,
         rotation: Rotation,
         yield_control: f32,
     },
-    PlayerShoot { 
-        player_id: String, 
-        position: Position, 
+    PlayerShoot {
+        player_id: String,
+        position: Position,
         direction: Rotation,
         weapon_type: String,
     },
-    PlayerDeath { 
-        player_id: String, 
-        killer_id: Option<String> 
+    PlayerDeath {
+        player_id: String,
+        killer_id: Option<String>,
     },
-    PlayerSpawn { 
-        player_id: String, 
-        position: Position 
+    PlayerSpawn {
+        player_id: String,
+        position: Position,
     },
-    HealthUpdate { 
-        player_id: String, 
-        health: u32 
+    HealthUpdate {
+        player_id: String,
+        health: u32,
     },
 }
 
@@ -109,11 +118,7 @@ pub struct Rotation {
 impl From<Quat> for Rotation {
     fn from(quat: Quat) -> Self {
         let (yaw, pitch, roll) = quat.to_euler(EulerRot::YXZ);
-        Self {
-            pitch,
-            yaw,
-            roll,
-        }
+        Self { pitch, yaw, roll }
     }
 }
 
@@ -166,14 +171,15 @@ impl Default for IncomingMessages {
 
 // Connect to the server
 pub fn connect_to_server(
-    server_addr: &str, 
+    server_addr: &str,
     username: String,
     outgoing_msgs: &mut ResMut<OutgoingMessages>,
     incoming_msgs: &mut ResMut<IncomingMessages>,
     network_state: &mut ResMut<NetworkState>,
 ) -> Result<(), String> {
     // Parse the server address
-    let addr = server_addr.parse::<SocketAddr>()
+    let addr = server_addr
+        .parse::<SocketAddr>()
         .map_err(|e| format!("Invalid server address: {}", e))?;
 
     // Create message channels
@@ -183,7 +189,7 @@ pub fn connect_to_server(
     // Set up the network state
     network_state.server_addr = Some(addr);
     network_state.username = Some(username.clone());
-    
+
     // Store channel endpoints
     outgoing_msgs.sender = Some(outgoing_tx);
     incoming_msgs.receiver = Some(incoming_rx);
@@ -198,18 +204,22 @@ pub fn connect_to_server(
             let socket = match UdpSocket::bind("0.0.0.0:0").await {
                 Ok(s) => Arc::new(s),
                 Err(e) => {
-                    let _ = incoming_tx.send(ServerMessage::Error {
-                        message: format!("Failed to bind socket: {}", e),
-                    }).await;
+                    let _ = incoming_tx
+                        .send(ServerMessage::Error {
+                            message: format!("Failed to bind socket: {}", e),
+                        })
+                        .await;
                     return;
                 }
             };
 
             // Connect to the server
             if let Err(e) = socket.connect(addr).await {
-                let _ = incoming_tx.send(ServerMessage::Error {
-                    message: format!("Failed to connect: {}", e),
-                }).await;
+                let _ = incoming_tx
+                    .send(ServerMessage::Error {
+                        message: format!("Failed to connect: {}", e),
+                    })
+                    .await;
                 return;
             }
 
@@ -218,23 +228,27 @@ pub fn connect_to_server(
             let json = match serde_json::to_string(&join_msg) {
                 Ok(j) => j,
                 Err(e) => {
-                    let _ = incoming_tx.send(ServerMessage::Error {
-                        message: format!("Failed to serialize join message: {}", e),
-                    }).await;
+                    let _ = incoming_tx
+                        .send(ServerMessage::Error {
+                            message: format!("Failed to serialize join message: {}", e),
+                        })
+                        .await;
                     return;
                 }
             };
 
             if let Err(e) = socket.send(json.as_bytes()).await {
-                let _ = incoming_tx.send(ServerMessage::Error {
-                    message: format!("Failed to send join message: {}", e),
-                }).await;
+                let _ = incoming_tx
+                    .send(ServerMessage::Error {
+                        message: format!("Failed to send join message: {}", e),
+                    })
+                    .await;
                 return;
             }
 
             // Clone socket for the receiver task
             let recv_socket = socket.clone();
-            
+
             // Spawn a task to handle incoming messages
             let incoming_task = tokio::spawn(async move {
                 let mut buf = vec![0u8; 2048];
@@ -292,7 +306,7 @@ fn process_outgoing_messages(
             // Send position updates
             let position = Position::from(transform.translation);
             let rotation = Rotation::from(transform.rotation);
-            
+
             // For now, just send position updates - this can be optimized to only send when needed
             let _ = sender.try_send(ClientMessage::Move {
                 position,
@@ -351,10 +365,18 @@ fn handle_network_events(
                     ServerMessage::GameStart => {
                         info!("Game started!");
                     }
-                    ServerMessage::PlayersInLobby { player_count, players } => {
+                    ServerMessage::PlayersInLobby {
+                        player_count,
+                        players,
+                    } => {
                         info!("Players in lobby: {} ({:?})", player_count, players);
                     }
-                    ServerMessage::PlayerMove { player_id, position, rotation, .. } => {
+                    ServerMessage::PlayerMove {
+                        player_id,
+                        position,
+                        rotation,
+                        ..
+                    } => {
                         // Update other player positions
                         // This would need to be handled by a separate system managing other players
                         debug!("Player {} moved to {:?}", player_id, position);
@@ -363,7 +385,10 @@ fn handle_network_events(
                         // Handle visual effects for other players shooting
                         debug!("Player {} fired weapon", player_id);
                     }
-                    ServerMessage::PlayerDeath { player_id, killer_id } => {
+                    ServerMessage::PlayerDeath {
+                        player_id,
+                        killer_id,
+                    } => {
                         // Handle player death events
                         if let Some(killer) = killer_id {
                             info!("Player {} was killed by {}", player_id, killer);
@@ -371,7 +396,10 @@ fn handle_network_events(
                             info!("Player {} died", player_id);
                         }
                     }
-                    ServerMessage::PlayerSpawn { player_id, position } => {
+                    ServerMessage::PlayerSpawn {
+                        player_id,
+                        position,
+                    } => {
                         // Handle player spawn events
                         info!("Player {} spawned at {:?}", player_id, position);
                     }
@@ -386,9 +414,14 @@ fn handle_network_events(
 }
 
 // Helper function to send a message to the server
-pub fn send_message(message: ClientMessage, outgoing_msgs: &OutgoingMessages) -> Result<(), String> {
+pub fn send_message(
+    message: ClientMessage,
+    outgoing_msgs: &OutgoingMessages,
+) -> Result<(), String> {
     if let Some(sender) = &outgoing_msgs.sender {
-        sender.try_send(message).map_err(|e| format!("Failed to send message: {}", e))?;
+        sender
+            .try_send(message)
+            .map_err(|e| format!("Failed to send message: {}", e))?;
         Ok(())
     } else {
         Err("Not connected to server".to_string())
