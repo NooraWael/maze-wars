@@ -1,13 +1,9 @@
+use shared::{server::ServerMessage, Player, Position, Rotation, Weapon};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::net::UdpSocket;
 use tokio::sync::Mutex;
 
-use crate::player::Player;
-use crate::position::Position;
-use crate::rotation::Rotation;
-use crate::weapon::Weapon;
-
-use super::{game_state::GameState, Server, ServerMessage};
+use super::{game_state::GameState, Server};
 
 impl Server {
     /// Handles new player joining the game

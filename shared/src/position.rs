@@ -1,3 +1,4 @@
+use bevy::math::Vec3;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
@@ -10,7 +11,7 @@ use serde::{Deserialize, Serialize};
 pub struct Position {
     pub x: f32,
     pub y: f32,
-    z: f32,
+    pub z: f32,
 }
 
 impl Position {
@@ -34,5 +35,21 @@ impl Default for Position {
     /// Provides a default `Position` instance with all coordinates set to `0.0`.
     fn default() -> Self {
         Self::new(0., 0., 0.)
+    }
+}
+
+impl From<Vec3> for Position {
+    fn from(vec: Vec3) -> Self {
+        Self {
+            x: vec.x,
+            y: vec.y,
+            z: vec.z,
+        }
+    }
+}
+
+impl Into<Vec3> for Position {
+    fn into(self) -> Vec3 {
+        Vec3::new(self.x, self.y, self.z)
     }
 }

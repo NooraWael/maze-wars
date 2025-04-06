@@ -1,10 +1,9 @@
-use bevy::prelude::*;
-use bevy::math::primitives::Capsule3d;
 use crate::game_front::player::Player;
-use crate::network::network::{
-    OutgoingMessages, ClientMessage, ServerMessage, 
-    Position, Rotation, send_message, NetworkEvent
-};
+use crate::network::network::{send_message, NetworkEvent, OutgoingMessages};
+use bevy::math::primitives::Capsule3d;
+use bevy::prelude::*;
+use shared::server::{ClientMessage, ServerMessage};
+use shared::{Position, Rotation};
 
 // Component for other networked players
 #[derive(Component)]
@@ -22,7 +21,8 @@ impl Plugin for PlayerNetworkPlugin {
                 send_player_movement,
                 send_player_actions,
                 handle_network_player_updates,
-            ).run_if(in_state(crate::menu::GameState::InGame)),
+            )
+                .run_if(in_state(crate::menu::GameState::InGame)),
         );
     }
 }
@@ -36,13 +36,16 @@ fn send_player_movement(
     if let Ok((transform, _)) = player_query.get_single() {
         let position = Position::from(transform.translation);
         let rotation = Rotation::from(transform.rotation);
-        
+
         // Send the movement update
-        let _ = send_message(ClientMessage::Move {
-            position,
-            rotation,
-            yield_control: 0.0, // Not sure what this is used for in your game
-        }, &outgoing_msgs);
+        let _ = send_message(
+            ClientMessage::Move {
+                position,
+                rotation,
+                yield_control: 0.0, // Not sure what this is used for in your game
+            },
+            &outgoing_msgs,
+        );
     }
 }
 
@@ -56,14 +59,17 @@ fn send_player_actions(
         if keyboard.just_pressed(KeyCode::KeyO) {
             let position = Position::from(transform.translation);
             let rotation = Rotation::from(transform.rotation);
-            
-            let _ = send_message(ClientMessage::Shoot {
-                position,
-                direction: rotation,
-                weapon_type: "standard".to_string(),
-            }, &outgoing_msgs);
+
+            let _ = send_message(
+                ClientMessage::Shoot {
+                    position,
+                    direction: rotation,
+                    weapon_type: "standard".to_string(),
+                },
+                &outgoing_msgs,
+            );
         }
-        
+
         // Add more actions as needed - TODO
     }
 }
@@ -79,7 +85,12 @@ fn handle_network_player_updates(
     for event in network_events.read() {
         if let NetworkEvent::ReceivedMessage(server_msg) = event {
             match server_msg {
-                ServerMessage::PlayerMove { player_id, position, rotation, .. } => {
+                ServerMessage::PlayerMove {
+                    player_id,
+                    position,
+                    rotation,
+                    ..
+                } => {
                     // Update or create other player
                     update_networked_player(
                         &mut commands,
@@ -90,18 +101,25 @@ fn handle_network_player_updates(
                         &mut meshes,
                         &mut materials,
                     );
-                },
-                ServerMessage::PlayerSpawn { player_id, position } => {
+                }
+                ServerMessage::PlayerSpawn {
+                    player_id,
+                    position,
+                } => {
                     // Spawn a new networked player
                     spawn_networked_player(
                         &mut commands,
                         player_id,
                         *position,
-                        Rotation { pitch: 0.0, yaw: 0.0, roll: 0.0 },
+                        Rotation {
+                            pitch: 0.0,
+                            yaw: 0.0,
+                            roll: 0.0,
+                        },
                         &mut meshes,
                         &mut materials,
                     );
-                },
+                }
                 ServerMessage::PlayerDeath { player_id, .. } => {
                     // Remove the player entity
                     for (entity, _, networked_player) in networked_players.iter() {
@@ -110,7 +128,7 @@ fn handle_network_player_updates(
                             break;
                         }
                     }
-                },
+                }
                 // Handle other messages as needed
                 _ => {}
             }
@@ -133,7 +151,7 @@ fn update_networked_player(
     for (_, mut transform, networked_player) in networked_players.iter_mut() {
         if networked_player.player_id == *player_id {
             // Update the player's position and rotation
-            transform.translation = Vec3::new(position.x, position.y, position.z);
+            transform.translation = Position::new(position.x, position.y, position.z).into();
             transform.rotation = rotation.into();
             found = true;
             break;
@@ -142,14 +160,7 @@ fn update_networked_player(
 
     // If we didn't find the player, create a new one
     if !found {
-        spawn_networked_player(
-            commands,
-            player_id,
-            position,
-            rotation,
-            meshes,
-            materials,
-        );
+        spawn_networked_player(commands, player_id, position, rotation, meshes, materials);
     }
 }
 
@@ -170,7 +181,7 @@ fn spawn_networked_player(
             base_color: Color::srgb(0.8, 0.2, 0.2),
             ..default()
         })),
-        Transform::from_translation(Vec3::new(position.x, position.y, position.z))
+        Transform::from_translation(Position::new(position.x, position.y, position.z).into())
             .with_rotation(rotation.into()),
         NetworkedPlayer {
             player_id: player_id.clone(),

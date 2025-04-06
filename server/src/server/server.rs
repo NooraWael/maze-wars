@@ -1,8 +1,6 @@
 use super::game_state::GameState;
-use super::ServerMessage;
 
-use crate::server::client_messages::ClientMessage;
-
+use shared::server::{ClientMessage, ServerMessage};
 use std::sync::Arc;
 use tokio::net::UdpSocket;
 use tokio::sync::Mutex;

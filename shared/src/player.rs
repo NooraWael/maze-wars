@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{position::Position, rotation::Rotation, weapon::Weapon};
+use crate::{rotation::Rotation, weapon::Weapon, Position};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 /// Represents a connected player with their current state

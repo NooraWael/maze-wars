@@ -1,11 +1,11 @@
+use shared::server::ServerMessage;
+use shared::Player;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::UdpSocket;
 
 use super::Server;
-use super::ServerMessage;
-use crate::player::Player;
 
 impl Server {
     /// Sends a message to a specific player

@@ -1,10 +1,11 @@
 use bevy::prelude::*;
-use serde::{Deserialize, Serialize};
+use shared::server::{ClientMessage, ServerMessage};
+use shared::{Position, Rotation};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::UdpSocket;
 use tokio::runtime::Runtime;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::mpsc;
 
 // Plugin for the network functionality
 pub struct NetworkPlugin;
@@ -23,108 +24,6 @@ impl Plugin for NetworkPlugin {
                     handle_network_events,
                 ),
             );
-    }
-}
-
-// Client messages to send to the server
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(tag = "type", content = "data")]
-pub enum ClientMessage {
-    JoinGame {
-        username: String,
-    },
-    Move {
-        position: Position,
-        rotation: Rotation,
-        yield_control: f32,
-    },
-    Shoot {
-        position: Position,
-        direction: Rotation,
-        weapon_type: String,
-    },
-}
-
-// Messages received from the server
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(tag = "type", content = "data")]
-pub enum ServerMessage {
-    Error {
-        message: String,
-    },
-    GameStart,
-    PlayersInLobby {
-        player_count: u32,
-        players: Vec<String>,
-    },
-    PlayerMove {
-        player_id: String,
-        position: Position,
-        rotation: Rotation,
-        yield_control: f32,
-    },
-    PlayerShoot {
-        player_id: String,
-        position: Position,
-        direction: Rotation,
-        weapon_type: String,
-    },
-    PlayerDeath {
-        player_id: String,
-        killer_id: Option<String>,
-    },
-    PlayerSpawn {
-        player_id: String,
-        position: Position,
-    },
-    HealthUpdate {
-        player_id: String,
-        health: u32,
-    },
-}
-
-// Position in 3D space
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
-pub struct Position {
-    pub x: f32,
-    pub y: f32,
-    pub z: f32,
-}
-
-impl From<Vec3> for Position {
-    fn from(vec: Vec3) -> Self {
-        Self {
-            x: vec.x,
-            y: vec.y,
-            z: vec.z,
-        }
-    }
-}
-
-impl Into<Vec3> for Position {
-    fn into(self) -> Vec3 {
-        Vec3::new(self.x, self.y, self.z)
-    }
-}
-
-// Rotation in 3D space
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
-pub struct Rotation {
-    pub pitch: f32,
-    pub yaw: f32,
-    pub roll: f32,
-}
-
-impl From<Quat> for Rotation {
-    fn from(quat: Quat) -> Self {
-        let (yaw, pitch, roll) = quat.to_euler(EulerRot::YXZ);
-        Self { pitch, yaw, roll }
-    }
-}
-
-impl Into<Quat> for Rotation {
-    fn into(self) -> Quat {
-        Quat::from_euler(EulerRot::YXZ, self.yaw, self.pitch, self.roll)
     }
 }
 
@@ -361,6 +260,9 @@ fn handle_network_events(
                 match msg {
                     ServerMessage::Error { message } => {
                         error!("Server error: {}", message);
+                    }
+                    ServerMessage::JoinGameError { message } => {
+                        error!("Join game error: {}", message);
                     }
                     ServerMessage::GameStart => {
                         info!("Game started!");

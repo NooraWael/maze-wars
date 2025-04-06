@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{position::Position, rotation::Rotation};
+use crate::{rotation::Rotation, Position};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]

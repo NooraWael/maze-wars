@@ -1,6 +1,6 @@
-use std::{collections::HashMap, net::SocketAddr};
+use shared::Player;
 
-use crate::player::Player;
+use std::{collections::HashMap, net::SocketAddr};
 
 #[derive(Debug)]
 pub struct GameState {
