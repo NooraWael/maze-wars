@@ -47,6 +47,7 @@ pub enum GameState {
     #[default]
     MainMenu,
     ConnectMenu,
+    WaitingMenu,
     InGame,
 }
 
