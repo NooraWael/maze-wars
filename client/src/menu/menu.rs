@@ -1,6 +1,9 @@
 use bevy::prelude::*;
+use shared::server::ServerMessage;
 
-use crate::network::network::{connect_to_server, IncomingMessages, NetworkEvent, NetworkState, OutgoingMessages};
+use crate::network::network::{
+    connect_to_server, IncomingMessages, NetworkEvent, NetworkState, OutgoingMessages,
+};
 
 // Plugin for menu functionality
 pub struct MenuPlugin;
@@ -10,11 +13,20 @@ impl Plugin for MenuPlugin {
         app.init_resource::<MenuState>()
             .init_state::<GameState>()
             .add_event::<MenuEvent>()
-            .add_systems(OnEnter(GameState::MainMenu), (setup_main_menu, setup_ui_camera))
-            .add_systems(OnEnter(GameState::ConnectMenu), (setup_connect_menu, setup_ui_camera))
+            .add_systems(
+                OnEnter(GameState::MainMenu),
+                (setup_main_menu, setup_ui_camera),
+            )
+            .add_systems(
+                OnEnter(GameState::ConnectMenu),
+                (setup_connect_menu, setup_ui_camera),
+            )
             .add_systems(OnEnter(GameState::InGame), (cleanup_ui, cleanup_ui_camera))
             .add_systems(OnExit(GameState::MainMenu), (cleanup_ui, cleanup_ui_camera))
-            .add_systems(OnExit(GameState::ConnectMenu), (cleanup_ui, cleanup_ui_camera))
+            .add_systems(
+                OnExit(GameState::ConnectMenu),
+                (cleanup_ui, cleanup_ui_camera),
+            )
             .add_systems(
                 Update,
                 (
@@ -22,8 +34,9 @@ impl Plugin for MenuPlugin {
                     handle_text_input,
                     handle_menu_events,
                     handle_connection_status,
-                    initialize_input_field, 
-                ).run_if(in_state(GameState::MainMenu).or(in_state(GameState::ConnectMenu))),
+                    initialize_input_field,
+                )
+                    .run_if(in_state(GameState::MainMenu).or(in_state(GameState::ConnectMenu))),
             );
     }
 }
@@ -71,7 +84,7 @@ pub enum ConnectionStatus {
 struct MenuUI;
 
 // Component for input fields
-#[derive(Component, PartialEq, Clone, Copy, Debug)]  
+#[derive(Component, PartialEq, Clone, Copy, Debug)]
 enum InputField {
     IpAddress,
     Username,
@@ -94,10 +107,7 @@ struct FocusedField;
 // Function to add to your MenuPlugin implementation
 fn setup_ui_camera(mut commands: Commands) {
     // Spawn a 2D camera specifically for the UI
-    commands.spawn((
-        Camera2dBundle::default(),
-        UiCamera,
-    ));
+    commands.spawn((Camera2dBundle::default(), UiCamera));
 }
 
 // System to setup the main menu
@@ -163,7 +173,7 @@ fn setup_main_menu(mut commands: Commands, asset_server: Res<AssetServer>) {
 
 // System to setup the connection menu
 fn setup_connect_menu(
-    mut commands: Commands, 
+    mut commands: Commands,
     asset_server: Res<AssetServer>,
     menu_state: Res<MenuState>,
 ) {
@@ -199,14 +209,12 @@ fn setup_connect_menu(
 
             // Form container
             parent
-                .spawn((
-                    Node {
-                        flex_direction: FlexDirection::Column,
-                        align_items: AlignItems::Center,
-                        width: Val::Px(400.0),
-                        ..default()
-                    },
-                ))
+                .spawn((Node {
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Center,
+                    width: Val::Px(400.0),
+                    ..default()
+                },))
                 .with_children(|parent| {
                     // IP Address label
                     parent.spawn((
@@ -242,13 +250,11 @@ fn setup_connect_menu(
                         ))
                         .with_children(|parent| {
                             parent.spawn((
-                                Text::new(
-                                    if !menu_state.ip_address.is_empty() {
-                                        menu_state.ip_address.clone()
-                                    } else {
-                                        "127.0.0.1:2025".to_string()
-                                    }
-                                ),
+                                Text::new(if !menu_state.ip_address.is_empty() {
+                                    menu_state.ip_address.clone()
+                                } else {
+                                    "127.0.0.1:2025".to_string()
+                                }),
                                 TextFont {
                                     font: asset_server.load("fonts/FiraSans-Bold.ttf"),
                                     font_size: 24.0,
@@ -298,13 +304,11 @@ fn setup_connect_menu(
                         ))
                         .with_children(|parent| {
                             parent.spawn((
-                                Text::new(
-                                    if !menu_state.username.is_empty() {
-                                        menu_state.username.clone()
-                                    } else {
-                                        "Player".to_string()
-                                    }
-                                ),
+                                Text::new(if !menu_state.username.is_empty() {
+                                    menu_state.username.clone()
+                                } else {
+                                    "Player".to_string()
+                                }),
                                 TextFont {
                                     font: asset_server.load("fonts/FiraSans-Bold.ttf"),
                                     font_size: 24.0,
@@ -339,14 +343,12 @@ fn setup_connect_menu(
 
                     // Buttons container
                     parent
-                        .spawn((
-                            Node {
-                                width: Val::Percent(100.0),
-                                flex_direction: FlexDirection::Row,
-                                justify_content: JustifyContent::SpaceBetween,
-                                ..default()
-                            },
-                        ))
+                        .spawn((Node {
+                            width: Val::Percent(100.0),
+                            flex_direction: FlexDirection::Row,
+                            justify_content: JustifyContent::SpaceBetween,
+                            ..default()
+                        },))
                         .with_children(|parent| {
                             // Back button
                             parent
@@ -434,7 +436,10 @@ fn handle_text_input(
     mut text_components: Query<&mut Text>,
     mut menu_events: EventWriter<MenuEvent>,
     mut menu_state: ResMut<MenuState>,
-    mut input_fields: Query<(Entity, &InputField, &Interaction, Option<&FocusedField>), (With<Button>, Changed<Interaction>)>,
+    mut input_fields: Query<
+        (Entity, &InputField, &Interaction, Option<&FocusedField>),
+        (With<Button>, Changed<Interaction>),
+    >,
     focused_fields: Query<(Entity, &InputField), With<FocusedField>>,
     mut commands: Commands,
 ) {
@@ -443,25 +448,25 @@ fn handle_text_input(
         if *interaction == Interaction::Pressed {
             // This field was just clicked
             info!("Field clicked: {:?}", field);
-            
+
             // If it's not already focused, give it focus
             if focused.is_none() {
                 // Remove focus from all other fields
                 for (other_entity, _) in focused_fields.iter() {
                     commands.entity(other_entity).remove::<FocusedField>();
                 }
-                
+
                 // Add focus to this field
                 commands.entity(entity).insert(FocusedField);
                 info!("Focus set to {:?}", field);
             }
         }
     }
-    
+
     // Now process keyboard input for the focused field
     if let Ok((_, focused_field)) = focused_fields.get_single() {
         let mut changed = false;
-        
+
         // Handle backspace
         if keyboard_input.just_pressed(KeyCode::Backspace) {
             match focused_field {
@@ -470,16 +475,16 @@ fn handle_text_input(
                         menu_state.ip_address.pop();
                         changed = true;
                     }
-                },
+                }
                 InputField::Username => {
                     if !menu_state.username.is_empty() {
                         menu_state.username.pop();
                         changed = true;
                     }
-                },
+                }
             }
         }
-        
+
         // Handle character input using key_to_char
         for key in keyboard_input.get_just_pressed() {
             if let Some(c) = key_to_char(*key) {
@@ -490,32 +495,32 @@ fn handle_text_input(
                             menu_state.ip_address.push(c);
                             changed = true;
                         }
-                    },
+                    }
                     InputField::Username => {
                         // For username, allow alphanumeric and some special chars
                         if c.is_alphanumeric() || c == '_' || c == '-' || c == ' ' {
                             menu_state.username.push(c);
                             changed = true;
                         }
-                    },
+                    }
                 }
             }
         }
-        
+
         // Send events if content changed
         if changed {
             match focused_field {
                 InputField::IpAddress => {
                     info!("IP address changed: {}", menu_state.ip_address);
                     menu_events.send(MenuEvent::IpAddressChanged(menu_state.ip_address.clone()));
-                },
+                }
                 InputField::Username => {
                     info!("Username changed: {}", menu_state.username);
                     menu_events.send(MenuEvent::UsernameChanged(menu_state.username.clone()));
-                },
+                }
             }
         }
-        
+
         // Update the displayed text
         for (field_type, children) in text_query.iter() {
             if *field_type == *focused_field {
@@ -528,16 +533,16 @@ fn handle_text_input(
                                 } else {
                                     menu_state.ip_address.clone()
                                 }
-                            },
+                            }
                             InputField::Username => {
                                 if menu_state.username.is_empty() && !changed {
                                     "Player".to_string()
                                 } else {
                                     menu_state.username.clone()
                                 }
-                            },
+                            }
                         };
-                        
+
                         text.0 = new_text;
                     }
                 }
@@ -547,7 +552,10 @@ fn handle_text_input(
 }
 
 fn initialize_input_field(
-    mut interaction_query: Query<(&Interaction, &InputField, &Children), (Changed<Interaction>, With<Button>)>,
+    mut interaction_query: Query<
+        (&Interaction, &InputField, &Children),
+        (Changed<Interaction>, With<Button>),
+    >,
     mut text_components: Query<&mut Text>,
     mut menu_state: ResMut<MenuState>,
 ) {
@@ -559,14 +567,14 @@ fn initialize_input_field(
                     if menu_state.ip_address.is_empty() {
                         menu_state.ip_address = "127.0.0.1:2025".to_string();
                     }
-                },
+                }
                 InputField::Username => {
                     if menu_state.username.is_empty() {
                         menu_state.username = "Player".to_string();
                     }
-                },
+                }
             }
-            
+
             // Update the displayed text
             for &child in children.iter() {
                 if let Ok(mut text) = text_components.get_mut(child) {
@@ -574,7 +582,7 @@ fn initialize_input_field(
                         InputField::IpAddress => menu_state.ip_address.clone(),
                         InputField::Username => menu_state.username.clone(),
                     };
-                    
+
                     text.0 = new_text;
                 }
             }
@@ -599,26 +607,28 @@ fn handle_menu_events(
             }
             MenuEvent::ConnectClicked => {
                 info!("Connect button clicked");
-                
+
                 // Validate input
                 if menu_state.ip_address.is_empty() {
                     info!("IP address is empty");
                     menu_state.error_message = Some("IP address cannot be empty".to_string());
                     return;
                 }
-                
+
                 if menu_state.username.is_empty() {
                     info!("Username is empty");
                     menu_state.error_message = Some("Username cannot be empty".to_string());
                     return;
                 }
-                
-                info!("Attempting to connect to server at {} with username {}", 
-                    menu_state.ip_address, menu_state.username);
-                
+
+                info!(
+                    "Attempting to connect to server at {} with username {}",
+                    menu_state.ip_address, menu_state.username
+                );
+
                 // Try to connect to server
                 menu_state.connection_status = ConnectionStatus::Connecting;
-                
+
                 match connect_to_server(
                     &menu_state.ip_address,
                     menu_state.username.clone(),
@@ -631,17 +641,17 @@ fn handle_menu_events(
                         info!("Connection initiated successfully");
                         menu_state.connection_status = ConnectionStatus::Connected;
                         menu_state.error_message = None;
-                        
-                        // Change game state to in-game
-                        info!("Transitioning to InGame state");
-                        game_state.set(GameState::InGame);
+
+                        // We no longer immediately transition to InGame
+                        // Just wait for server confirmation
+                        info!("Waiting for server confirmation...");
                     }
                     Err(e) => {
                         // Connection failed
                         error!("Connection failed: {}", e);
                         menu_state.connection_status = ConnectionStatus::Failed;
                         menu_state.error_message = Some(format!("Connection failed: {}", e));
-                        
+
                         // Force update the UI to show the error message
                         let error_msg = format!("Connection failed: {}", e);
                         menu_state.error_message = Some(error_msg.clone());
@@ -685,7 +695,24 @@ fn handle_connection_status(
                 menu_state.connection_status = ConnectionStatus::Failed;
                 menu_state.error_message = Some(format!("Error: {}", message));
             }
-            _ => {}
+            NetworkEvent::ReceivedMessage(msg) => {
+                // Handle received messages from the server
+                match msg {
+                    ServerMessage::JoinGameError { message } => {
+                        // Handle join game error
+                        menu_state.connection_status = ConnectionStatus::Failed;
+                        menu_state.error_message = Some(format!("Join failed: {}", message));
+                        info!("Join game error: {}", message);
+                    }
+                    ServerMessage::GameStart => {
+                        // Successful join - transition to game
+                        info!("Game start confirmed by server");
+                        game_state.set(GameState::InGame);
+                    }
+                    // Handle other relevant server messages
+                    _ => {}
+                }
+            }
         }
     }
 }
@@ -702,7 +729,6 @@ fn cleanup_ui_camera(mut commands: Commands, camera_query: Query<Entity, With<Ui
         commands.entity(camera).despawn();
     }
 }
-
 
 // Helper function to convert keys to characters
 fn key_to_char(key: KeyCode) -> Option<char> {
