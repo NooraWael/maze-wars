@@ -21,10 +21,18 @@ impl Plugin for MenuPlugin {
                 OnEnter(GameState::ConnectMenu),
                 (setup_connect_menu, setup_ui_camera),
             )
+            .add_systems(
+                OnEnter(GameState::WaitingMenu),
+                (setup_waiting_menu, setup_ui_camera),
+            )
             .add_systems(OnEnter(GameState::InGame), (cleanup_ui, cleanup_ui_camera))
             .add_systems(OnExit(GameState::MainMenu), (cleanup_ui, cleanup_ui_camera))
             .add_systems(
                 OnExit(GameState::ConnectMenu),
+                (cleanup_ui, cleanup_ui_camera),
+            )
+            .add_systems(
+                OnExit(GameState::WaitingMenu),
                 (cleanup_ui, cleanup_ui_camera),
             )
             .add_systems(
@@ -35,8 +43,13 @@ impl Plugin for MenuPlugin {
                     handle_menu_events,
                     handle_connection_status,
                     initialize_input_field,
+                    update_waiting_menu_ui, // Add the new system here
                 )
-                    .run_if(in_state(GameState::MainMenu).or(in_state(GameState::ConnectMenu))),
+                    .run_if(
+                        in_state(GameState::MainMenu)
+                            .or(in_state(GameState::ConnectMenu))
+                            .or(in_state(GameState::WaitingMenu)),
+                    ),
             );
     }
 }
@@ -68,6 +81,8 @@ pub struct MenuState {
     pub username: String,
     pub connection_status: ConnectionStatus,
     pub error_message: Option<String>,
+    pub player_list: Vec<String>,
+    pub player_count: u32,
 }
 
 // Status of the connection attempt
@@ -104,6 +119,13 @@ pub struct UiCamera;
 
 #[derive(Component)]
 struct FocusedField;
+
+// Add these components to identify UI elements that need updating
+#[derive(Component)]
+struct PlayerCountText;
+
+#[derive(Component)]
+struct PlayerListContainer;
 
 // Function to add to your MenuPlugin implementation
 fn setup_ui_camera(mut commands: Commands) {
@@ -705,6 +727,24 @@ fn handle_connection_status(
                         menu_state.error_message = Some(format!("Join failed: {}", message));
                         info!("Join game error: {}", message);
                     }
+                    ServerMessage::PlayersInLobby {
+                        player_count,
+                        players,
+                    } => {
+                        // Update lobby state and show waiting screen
+                        menu_state.connection_status = ConnectionStatus::Connected;
+                        menu_state.player_list = players.clone();
+                        menu_state.player_count = *player_count;
+
+                        // Transition to waiting menu if not already there
+                        if !matches!(
+                            *game_state,
+                            bevy::prelude::NextState::Pending(GameState::WaitingMenu)
+                        ) {
+                            game_state.set(GameState::WaitingMenu);
+                            info!("Waiting in lobby with {} players", player_count);
+                        }
+                    }
                     ServerMessage::GameStart => {
                         // Successful join - transition to game
                         info!("Game start confirmed by server");
@@ -776,5 +816,182 @@ fn key_to_char(key: KeyCode) -> Option<char> {
         KeyCode::Minus => Some('-'),
         KeyCode::Equal => Some('='),
         _ => None,
+    }
+}
+
+// System to setup the waiting menu
+fn setup_waiting_menu(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    menu_state: Res<MenuState>,
+) {
+    // Root node
+    commands
+        .spawn((
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                flex_direction: FlexDirection::Column,
+                ..default()
+            },
+            BackgroundColor(Color::srgb(0.1, 0.1, 0.1)),
+            MenuUI,
+        ))
+        .with_children(|parent| {
+            // Title
+            parent.spawn((
+                Text::new("WAITING FOR GAME START"),
+                TextFont {
+                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                    font_size: 50.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.9, 0.9, 0.9)),
+                Node {
+                    margin: UiRect::bottom(Val::Px(30.0)),
+                    ..default()
+                },
+            ));
+
+            // Player count - add PlayerCountText tag
+            parent.spawn((
+                Text::new(format!("Players in lobby: {}", menu_state.player_count)),
+                TextFont {
+                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                    font_size: 28.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.7, 0.9, 0.7)),
+                Node {
+                    margin: UiRect::bottom(Val::Px(20.0)),
+                    ..default()
+                },
+                PlayerCountText,
+            ));
+
+            // Player list container - add PlayerListContainer tag
+            parent
+                .spawn((
+                    Node {
+                        flex_direction: FlexDirection::Column,
+                        align_items: AlignItems::Center,
+                        width: Val::Px(400.0),
+                        padding: UiRect::all(Val::Px(20.0)),
+                        border: UiRect::all(Val::Px(2.0)),
+                        ..default()
+                    },
+                    BorderColor(Color::srgb(0.3, 0.3, 0.3)),
+                    BackgroundColor(Color::srgb(0.15, 0.15, 0.15)),
+                    PlayerListContainer,
+                ))
+                .with_children(|parent| {
+                    // Player list title
+                    parent.spawn((
+                        Text::new("Players:"),
+                        TextFont {
+                            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                            font_size: 24.0,
+                            ..default()
+                        },
+                        TextColor(Color::srgb(0.9, 0.9, 0.9)),
+                        Node {
+                            margin: UiRect::bottom(Val::Px(10.0)),
+                            ..default()
+                        },
+                    ));
+
+                    // Player entries
+                    for player in &menu_state.player_list {
+                        parent.spawn((
+                            Text::new(player),
+                            TextFont {
+                                font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                                font_size: 20.0,
+                                ..default()
+                            },
+                            TextColor(Color::srgb(0.8, 0.8, 1.0)),
+                            Node {
+                                margin: UiRect::bottom(Val::Px(5.0)),
+                                ..default()
+                            },
+                        ));
+                    }
+                });
+
+            // Waiting message
+            parent.spawn((
+                Text::new("Game will start automatically when ready..."),
+                TextFont {
+                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                    font_size: 20.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.7, 0.7, 0.7)),
+                Node {
+                    margin: UiRect::all(Val::Px(30.0)),
+                    ..default()
+                },
+            ));
+        });
+}
+
+// System to update the player list UI when new data is received
+fn update_waiting_menu_ui(
+    mut commands: Commands,
+    menu_state: Res<MenuState>,
+    asset_server: Res<AssetServer>,
+    mut player_count_text: Query<&mut Text, With<PlayerCountText>>,
+    player_list_container: Query<Entity, With<PlayerListContainer>>,
+    game_state: Res<State<GameState>>,
+) {
+    // Only update if we're in the waiting menu state
+    if *game_state.get() == GameState::WaitingMenu {
+        // Update player count text
+        if let Ok(mut text) = player_count_text.get_single_mut() {
+            text.0 = format!("Players in lobby: {}", menu_state.player_count);
+        }
+
+        // Update player list
+        if let Ok(container) = player_list_container.get_single() {
+            // Clear current entries but keep the container
+            commands.entity(container).despawn_descendants();
+
+            // Rebuild the player list
+            commands.entity(container).with_children(|parent| {
+                // Player list title
+                parent.spawn((
+                    Text::new("Players:"),
+                    TextFont {
+                        font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                        font_size: 24.0,
+                        ..default()
+                    },
+                    TextColor(Color::srgb(0.9, 0.9, 0.9)),
+                    Node {
+                        margin: UiRect::bottom(Val::Px(10.0)),
+                        ..default()
+                    },
+                ));
+
+                // Player entries
+                for player in &menu_state.player_list {
+                    parent.spawn((
+                        Text::new(player),
+                        TextFont {
+                            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                            font_size: 20.0,
+                            ..default()
+                        },
+                        TextColor(Color::srgb(0.8, 0.8, 1.0)),
+                        Node {
+                            margin: UiRect::bottom(Val::Px(5.0)),
+                            ..default()
+                        },
+                    ));
+                }
+            });
+        }
     }
 }
