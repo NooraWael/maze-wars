@@ -1,16 +1,24 @@
 use shared::Player;
 
 use std::{collections::HashMap, net::SocketAddr};
-
 #[derive(Debug)]
-pub struct GameState {
-    pub players: HashMap<SocketAddr, Player>,
+pub enum GameState {
+    Waiting,
+    InProgress,
+    Finished,
 }
 
-impl GameState {
+#[derive(Debug)]
+pub struct Game {
+    pub players: HashMap<SocketAddr, Player>,
+    pub state: GameState,
+}
+
+impl Game {
     pub fn new() -> Self {
-        GameState {
+        Game {
             players: HashMap::new(),
+            state: GameState::Waiting,
         }
     }
 }

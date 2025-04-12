@@ -1,4 +1,4 @@
-use super::game_state::GameState;
+use super::game::Game;
 
 use shared::server::{ClientMessage, ServerMessage};
 use std::sync::Arc;
@@ -19,7 +19,7 @@ pub struct Server {
     port: u16,
     pub min_players: u8,
     pub max_players: u8,
-    game_state: Arc<Mutex<GameState>>,
+    game_state: Arc<Mutex<Game>>,
 }
 
 impl Server {
@@ -29,7 +29,7 @@ impl Server {
             port,
             min_players: 1,
             max_players: 10,
-            game_state: Arc::new(Mutex::new(GameState::new())),
+            game_state: Arc::new(Mutex::new(Game::new())),
         }
     }
 

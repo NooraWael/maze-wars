@@ -1,4 +1,4 @@
-mod game_state;
+mod game;
 mod message_handlers;
 mod message_helpers;
 

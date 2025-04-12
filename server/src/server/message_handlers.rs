@@ -3,7 +3,7 @@ use std::{net::SocketAddr, sync::Arc};
 use tokio::net::UdpSocket;
 use tokio::sync::Mutex;
 
-use super::{game_state::GameState, Server};
+use super::{game::Game, Server};
 
 impl Server {
     /// Handles new player joining the game
@@ -18,7 +18,7 @@ impl Server {
     /// Result indicating success or failure
     pub async fn handle_join_game(
         &self,
-        game_state: Arc<Mutex<GameState>>,
+        game_state: Arc<Mutex<Game>>,
         socket: Arc<UdpSocket>,
         addr: SocketAddr,
         username: String,
@@ -78,7 +78,7 @@ impl Server {
     /// Result indicating success or failure
     pub async fn handle_move(
         &self,
-        game_state: Arc<Mutex<GameState>>,
+        game_state: Arc<Mutex<Game>>,
         socket: Arc<UdpSocket>,
         addr: SocketAddr,
         position: Position,
@@ -122,7 +122,7 @@ impl Server {
     /// Result indicating success or failure
     pub async fn handle_shoot(
         &self,
-        game_state: Arc<Mutex<GameState>>,
+        game_state: Arc<Mutex<Game>>,
         socket: Arc<UdpSocket>,
         addr: SocketAddr,
         position: Position,
