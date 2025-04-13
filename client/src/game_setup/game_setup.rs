@@ -1,8 +1,8 @@
-use bevy::prelude::*;
-use bevy::render::camera::Viewport;
+use crate::game_front;
 use crate::menu::GameState;
 use crate::PlayerEntityResource;
-use crate::game_front;
+use bevy::prelude::*;
+use bevy::render::camera::Viewport;
 
 pub struct GameSetupPlugin;
 
@@ -12,7 +12,10 @@ impl Plugin for GameSetupPlugin {
             // Add this line to make sure the tagging system runs after setup
             .add_systems(PostStartup, crate::tag_player_camera)
             // Add this line to initialize viewports after setup
-            .add_systems(OnEnter(GameState::InGame), initialize_camera_viewports.after(setup_game))
+            .add_systems(
+                OnEnter(GameState::InGame),
+                initialize_camera_viewports.after(setup_game),
+            )
             .add_systems(OnExit(GameState::InGame), cleanup_game);
     }
 }
@@ -24,12 +27,13 @@ fn setup_game(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     info!("Setting up game world...");
-    
+
     // Create the game world
     game_front::world::create_world(&mut commands, &mut meshes, &mut materials);
 
     // Spawn the player
-    let player_entity = game_front::player::spawn_player(&mut commands, &mut meshes, &mut materials);
+    let player_entity =
+        game_front::player::spawn_player(&mut commands, &mut meshes, &mut materials);
     commands.insert_resource(PlayerEntityResource(player_entity));
 
     // Create minimap camera (top-down view)
@@ -67,12 +71,12 @@ fn cleanup_game(
     entities: Query<Entity, Without<Camera>>, // Don't remove UI cameras
 ) {
     info!("Cleaning up game world...");
-    
+
     // Remove all game entities
     for entity in entities.iter() {
         commands.entity(entity).despawn_recursive();
     }
-    
+
     // Remove the player entity resource
     commands.remove_resource::<PlayerEntityResource>();
 }
@@ -88,7 +92,10 @@ fn initialize_camera_viewports(
         let window_width = window.physical_width();
         let window_height = window.physical_height();
 
-        info!("Initializing camera viewports. Window size: {}x{}", window_width, window_height);
+        info!(
+            "Initializing camera viewports. Window size: {}x{}",
+            window_width, window_height
+        );
 
         // Main camera takes up the full window
         if let Ok(mut camera) = main_camera.get_single_mut() {
