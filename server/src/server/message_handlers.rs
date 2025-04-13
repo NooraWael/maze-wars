@@ -1,9 +1,12 @@
 use shared::{server::ServerMessage, Player, Position, Rotation, Weapon};
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc, time::Instant};
 use tokio::net::UdpSocket;
 use tokio::sync::Mutex;
 
-use super::{game::Game, Server};
+use super::{
+    game::{Game, GameState},
+    Server,
+};
 
 impl Server {
     /// Handles new player joining the game
@@ -53,6 +56,22 @@ impl Server {
         );
         state.players.insert(addr, player);
         log::info!("New player connection: {} from {}", username, addr);
+
+        // Start timer if we have enough players but game hasn't started yet
+        let player_count = state.players.len();
+        if player_count >= self.min_players as usize
+            && player_count <= self.max_players as usize
+            && state.state == GameState::Waiting
+            && state.game_start_time.is_none()
+        {
+            log::info!("Minimum player count reached, starting 5 seconds timer until game begins");
+            state.game_start_time = Some(Instant::now());
+
+            // Inform players about the timer
+            let info_message = ServerMessage::GameStart;
+            self.broadcast_message(&socket, info_message, &state.players)
+                .await?;
+        }
 
         let response = ServerMessage::PlayersInLobby {
             player_count: state.players.len() as u32,

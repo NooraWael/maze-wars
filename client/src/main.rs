@@ -1,24 +1,24 @@
 use bevy::{prelude::*, render::camera::Viewport, window::WindowResized};
 
 mod game_front;
-mod menu;         
-mod network {     
-    pub mod network;  
+mod menu;
+mod network {
+    pub mod network;
 }
-mod game_setup;  
-mod player_network; 
+mod game_setup;
+mod player_network;
 
-use menu::MenuPlugin;
-use network::network::NetworkPlugin;
 use crate::game_setup::game_setup::GameSetupPlugin;
 use crate::player_network::player_network::PlayerNetworkPlugin;
+use menu::MenuPlugin;
+use network::network::NetworkPlugin;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins((
-            MenuPlugin, 
-            NetworkPlugin, 
+            MenuPlugin,
+            NetworkPlugin,
             GameSetupPlugin,
             PlayerNetworkPlugin,
         ))
@@ -35,7 +35,7 @@ fn main() {
                 update_camera_viewports,
                 update_minimap_camera,
             )
-            .run_if(in_state(menu::GameState::InGame)),
+                .run_if(in_state(menu::GameState::InGame)),
         )
         .run();
 }
@@ -46,15 +46,10 @@ struct MainCamera;
 #[derive(Component)]
 struct MinimapCamera;
 
-
 #[derive(Resource)]
 struct PlayerEntityResource(Entity);
 
-
-fn setup(
-    mut commands: Commands,
-) {
-
+fn setup(mut commands: Commands) {
     info!("Application starting...");
 }
 

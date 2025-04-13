@@ -1,7 +1,7 @@
 use shared::Player;
+use std::{collections::HashMap, net::SocketAddr, time::Instant};
 
-use std::{collections::HashMap, net::SocketAddr};
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum GameState {
     Waiting,
     InProgress,
@@ -12,6 +12,7 @@ pub enum GameState {
 pub struct Game {
     pub players: HashMap<SocketAddr, Player>,
     pub state: GameState,
+    pub game_start_time: Option<Instant>,
 }
 
 impl Game {
@@ -19,6 +20,7 @@ impl Game {
         Game {
             players: HashMap::new(),
             state: GameState::Waiting,
+            game_start_time: None,
         }
     }
 }

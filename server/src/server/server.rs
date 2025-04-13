@@ -2,8 +2,10 @@ use super::game::Game;
 
 use shared::server::{ClientMessage, ServerMessage};
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::net::UdpSocket;
 use tokio::sync::Mutex;
+use tokio::time::{self, Duration};
 
 #[derive(Debug)]
 /// Main game server handling network communication and game state
@@ -20,6 +22,7 @@ pub struct Server {
     pub min_players: u8,
     pub max_players: u8,
     game_state: Arc<Mutex<Game>>,
+    game_start_timer: Option<Instant>,
 }
 
 impl Server {
@@ -30,6 +33,7 @@ impl Server {
             min_players: 1,
             max_players: 10,
             game_state: Arc::new(Mutex::new(Game::new())),
+            game_start_timer: None,
         }
     }
 
@@ -78,6 +82,60 @@ impl Server {
 
         let socket = Arc::new(socket);
         let game_state = self.game_state.clone();
+
+        // Create a timer check task
+        let game_state_timer = game_state.clone();
+        let socket_timer = socket.clone();
+        let min_players = self.min_players;
+
+        tokio::spawn(async move {
+            let mut interval = time::interval(Duration::from_secs(1));
+            loop {
+                interval.tick().await;
+
+                let mut state = game_state_timer.lock().await;
+
+                // Check if we have enough players and game is in waiting state
+                if state.state == super::game::GameState::Waiting {
+                    let player_count = state.players.len() as u8;
+
+                    // Set start timer if we have enough players and timer isn't set yet
+                    if player_count >= min_players {
+                        if state.game_start_time.is_none() {
+                            state.game_start_time = Some(Instant::now());
+                            log::info!("Minimum player count reached ({}/{}). Starting 5 second countdown!",
+                                      player_count, min_players);
+                        }
+                    } else if state.game_start_time.is_some() {
+                        // Cancel timer if player count drops below minimum
+                        state.game_start_time = None;
+                        log::info!("Player count dropped below minimum. Cancelling countdown.");
+                    }
+
+                    // Check if timer has elapsed
+                    if let Some(start_time) = state.game_start_time {
+                        let elapsed = start_time.elapsed();
+                        if elapsed >= Duration::from_secs(5) {
+                            // 5 seconds countdown
+                            state.state = super::game::GameState::InProgress;
+                            log::info!("Game starting after 5 second countdown!");
+
+                            // Send game start message to all players
+                            let message = ServerMessage::GameStart;
+                            if let Err(e) = Self::broadcast_message_static(
+                                &socket_timer,
+                                message,
+                                &state.players,
+                            )
+                            .await
+                            {
+                                log::error!("Failed to broadcast game start: {}", e);
+                            }
+                        }
+                    }
+                }
+            }
+        });
 
         let mut buf = vec![0u8; 1024];
         loop {

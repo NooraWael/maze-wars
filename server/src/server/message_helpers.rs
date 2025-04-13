@@ -51,4 +51,19 @@ impl Server {
         }
         Ok(())
     }
+
+    /// Static version of broadcast_message that can be used from timer tasks
+    pub async fn broadcast_message_static(
+        socket: &Arc<UdpSocket>,
+        message: ServerMessage,
+        players: &std::collections::HashMap<std::net::SocketAddr, shared::Player>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let message_json = serde_json::to_string(&message)?;
+        for addr in players.keys() {
+            if let Err(e) = socket.send_to(message_json.as_bytes(), addr).await {
+                log::warn!("Failed to send message to {}: {}", addr, e);
+            }
+        }
+        Ok(())
+    }
 }
