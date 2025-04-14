@@ -22,12 +22,7 @@ pub enum ServerMessage {
         rotation: Rotation,
         yield_control: f32,
     },
-    PlayerShoot {
-        player_id: String,
-        position: Position,
-        direction: Rotation,
-        weapon_type: String,
-    },
+
     PlayerDeath {
         player_id: String,
         killer_id: Option<String>,

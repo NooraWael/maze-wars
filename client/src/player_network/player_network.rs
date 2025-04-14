@@ -61,10 +61,8 @@ fn send_player_actions(
             let rotation = Rotation::from(transform.rotation);
 
             let _ = send_message(
-                ClientMessage::Shoot {
-                    position,
-                    direction: rotation,
-                    weapon_type: "standard".to_string(),
+                ClientMessage::ShotPlayer {
+                    player_username: "".to_string(),
                 },
                 &outgoing_msgs,
             );

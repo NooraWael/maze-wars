@@ -214,13 +214,12 @@ fn process_outgoing_messages(
             });
 
             // Handle shooting
-            if keyboard.just_pressed(KeyCode::KeyO) {
-                let _ = sender.try_send(ClientMessage::Shoot {
-                    position,
-                    direction: rotation,
-                    weapon_type: "standard".to_string(),
-                });
-            }
+            // idk noora plaze help
+            // if keyboard.just_pressed(KeyCode::KeyO) {
+            //     let _ = sender.try_send(ClientMessage::ShotPlayer {
+            //         player_username: "REPLACE_ME".to_string(),
+            //     });
+            // }
         }
     }
 }
@@ -283,10 +282,7 @@ fn handle_network_events(
                         // This would need to be handled by a separate system managing other players
                         debug!("Player {} moved to {:?}", player_id, position);
                     }
-                    ServerMessage::PlayerShoot { player_id, .. } => {
-                        // Handle visual effects for other players shooting
-                        debug!("Player {} fired weapon", player_id);
-                    }
+
                     ServerMessage::PlayerDeath {
                         player_id,
                         killer_id,

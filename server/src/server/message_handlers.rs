@@ -144,27 +144,37 @@ impl Server {
         game_state: Arc<Mutex<Game>>,
         socket: Arc<UdpSocket>,
         addr: SocketAddr,
-        position: Position,
-        direction: Rotation,
-        weapon_type: String,
+        player_to_shoot: String,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let state = game_state.lock().await;
-        if let Some(player) = state.players.get(&addr) {
-            log::debug!(
-                "Player {} fired {} weapon from {:?}",
-                player.username,
-                weapon_type,
-                position
-            );
-            let response = ServerMessage::PlayerShoot {
-                player_id: player.username.clone(),
-                position,
-                direction,
-                weapon_type,
-            };
-            self.broadcast_message(&socket, response, &state.players)
-                .await?;
-        }
+        let shooter = match state.players.get(&addr) {
+            Some(p) => p,
+            None => {
+                log::warn!("Shooter not found for address {}", addr);
+                return Ok(());
+            }
+        };
+
+        // Find the address of the player to shoot by username
+        let target_addr = match state
+            .players
+            .iter()
+            .find(|(_, p)| p.username == player_to_shoot)
+        {
+            Some((addr, _)) => addr,
+            None => {
+                log::warn!("Player to shoot not found: {}", player_to_shoot);
+                return Ok(());
+            }
+        };
+
+        let player_to_shoot = state.players.get(target_addr).unwrap();
+
+        log::debug!(
+            "Player {} fired at {}",
+            shooter.username,
+            player_to_shoot.username
+        );
         Ok(())
     }
 }

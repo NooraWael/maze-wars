@@ -13,9 +13,7 @@ pub enum ClientMessage {
         rotation: Rotation,
         yield_control: f32,
     },
-    Shoot {
-        position: Position,
-        direction: Rotation,
-        weapon_type: String,
+    ShotPlayer {
+        player_username: String,
     },
 }

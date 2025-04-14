@@ -180,20 +180,9 @@ impl Server {
                     )
                     .await?;
                 }
-                ClientMessage::Shoot {
-                    position,
-                    direction,
-                    weapon_type,
-                } => {
-                    self.handle_shoot(
-                        game_state.clone(),
-                        socket.clone(),
-                        addr,
-                        position,
-                        direction,
-                        weapon_type,
-                    )
-                    .await?;
+                ClientMessage::ShotPlayer { player_username } => {
+                    self.handle_shoot(game_state.clone(), socket.clone(), addr, player_username)
+                        .await?;
                 }
             }
         }
