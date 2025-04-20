@@ -13,9 +13,6 @@ use shared::server::{ClientMessage, ServerMessage};
 use shared::{Position, Rotation};
 use std::collections::HashMap;
 
-
-
-
 const SCREEN_WIDTH: u32 = 800;
 const SCREEN_HEIGHT: u32 = 600;
 const MINIMAP_TILE_SIZE: u32 = 20;
@@ -69,6 +66,7 @@ fn render_first_person_view(
     canvas: &mut Canvas<Window>,
     maze: &[[Tile; MAZE_WIDTH]; MAZE_HEIGHT],
     player: &Player3D,
+    other_players: &HashMap<String, (Position, Rotation)>,
 ) {
     canvas.set_draw_color(Color::RGB(135, 206, 235)); // Sky blue
     canvas
@@ -105,13 +103,64 @@ fn render_first_person_view(
                 .unwrap();
         }
     }
+
+    canvas.set_draw_color(Color::RGB(0, 0, 255));
+    for (_id, (pos, _rot)) in other_players.iter() {
+        // Calculate relative position to player
+        let dx = pos.x - player.x;
+        let dy = pos.y - player.y;
+
+        let distance = (dx * dx + dy * dy).sqrt();
+
+        // Skip drawing if too far
+        if distance > RAY_DISTANCE {
+            continue;
+        }
+
+        if !has_line_of_sight(maze, (player.x, player.y), (pos.x, pos.y)) {
+            continue; 
+        }
+
+        let angle_to_enemy = dy.atan2(dx);
+        let mut angle_diff = angle_to_enemy - player.angle;
+
+        // Normalize angle to [-PI, PI]
+        while angle_diff > std::f32::consts::PI {
+            angle_diff -= 2.0 * std::f32::consts::PI;
+        }
+        while angle_diff < -std::f32::consts::PI {
+            angle_diff += 2.0 * std::f32::consts::PI;
+        }
+
+        // Ignore if outside FOV
+        if angle_diff.abs() > FOV / 2.0 {
+            continue;
+        }
+
+        // Convert to screen X
+        let screen_x = ((angle_diff + FOV / 2.0) / FOV) * SCREEN_WIDTH as f32;
+
+        // Simulate sprite scaling based on distance
+        let sprite_height = (SCREEN_HEIGHT as f32 / distance).min(SCREEN_HEIGHT as f32 / 1.5);
+        let sprite_width = sprite_height / 2.0;
+        let top = (SCREEN_HEIGHT as f32 - sprite_height) / 2.0;
+
+        let rect = Rect::new(
+            (screen_x - sprite_width / 2.0) as i32,
+            top as i32,
+            sprite_width as u32,
+            sprite_height as u32,
+        );
+
+        let _ = canvas.fill_rect(rect);
+    }
 }
 
 fn render_minimap(
     canvas: &mut Canvas<Window>,
     maze: &[[Tile; MAZE_WIDTH]; MAZE_HEIGHT],
     player: &Player3D,
-    other_players: &HashMap<String, (Position, Rotation)>
+    other_players: &HashMap<String, (Position, Rotation)>,
 ) {
     for (y, row) in maze.iter().enumerate() {
         for (x, tile) in row.iter().enumerate() {
@@ -140,16 +189,15 @@ fn render_minimap(
     ));
 
     // Render other players
-canvas.set_draw_color(Color::RGB(0, 0, 255)); // Blue for other players
-for (_name, (pos, _rot)) in other_players.iter() {
-    let _ = canvas.fill_rect(Rect::new(
-        (pos.x as usize * MINIMAP_TILE_SIZE as usize) as i32,
-        (pos.y as usize * MINIMAP_TILE_SIZE as usize) as i32,
-        MINIMAP_TILE_SIZE,
-        MINIMAP_TILE_SIZE,
-    ));
-}
-
+    canvas.set_draw_color(Color::RGB(0, 0, 255)); // Blue for other players
+    for (_name, (pos, _rot)) in other_players.iter() {
+        let _ = canvas.fill_rect(Rect::new(
+            (pos.x as usize * MINIMAP_TILE_SIZE as usize) as i32,
+            (pos.y as usize * MINIMAP_TILE_SIZE as usize) as i32,
+            MINIMAP_TILE_SIZE,
+            MINIMAP_TILE_SIZE,
+        ));
+    }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -161,7 +209,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let client = NetworkClient::new("0.0.0.0:0", &server_addr)?;
 
-    client.send(&ClientMessage::JoinGame { username: username.clone() })?;
+    client.send(&ClientMessage::JoinGame {
+        username: username.clone(),
+    })?;
 
     println!("Waiting to join lobby...");
 
@@ -314,9 +364,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         canvas.clear();
 
         if game_started {
-            render_first_person_view(&mut canvas, &maze_map, &player);
+            render_first_person_view(&mut canvas, &maze_map, &player, &other_players);
             render_minimap(&mut canvas, &maze_map, &player, &other_players);
-
         }
 
         canvas.present();
@@ -330,4 +379,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+fn has_line_of_sight(
+    maze: &[[Tile; MAZE_WIDTH]; MAZE_HEIGHT],
+    from: (f32, f32),
+    to: (f32, f32),
+) -> bool {
+    let dx = to.0 - from.0;
+    let dy = to.1 - from.1;
+    let distance = (dx * dx + dy * dy).sqrt();
+
+    let steps = (distance / 0.05).ceil() as usize;
+    for i in 0..steps {
+        let t = i as f32 / steps as f32;
+        let x = from.0 + dx * t;
+        let y = from.1 + dy * t;
+
+        let gx = x as usize;
+        let gy = y as usize;
+
+        if gx >= MAZE_WIDTH || gy >= MAZE_HEIGHT {
+            return false;
+        }
+
+        if maze[gy][gx] == Tile::Wall {
+            return false; // blocked!
+        }
+    }
+
+    true
 }
