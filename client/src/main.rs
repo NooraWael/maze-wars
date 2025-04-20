@@ -11,6 +11,10 @@ use sdl2::{
 };
 use shared::server::{ClientMessage, ServerMessage};
 use shared::{Position, Rotation};
+use std::collections::HashMap;
+
+
+
 
 const SCREEN_WIDTH: u32 = 800;
 const SCREEN_HEIGHT: u32 = 600;
@@ -107,6 +111,7 @@ fn render_minimap(
     canvas: &mut Canvas<Window>,
     maze: &[[Tile; MAZE_WIDTH]; MAZE_HEIGHT],
     player: &Player3D,
+    other_players: &HashMap<String, (Position, Rotation)>
 ) {
     for (y, row) in maze.iter().enumerate() {
         for (x, tile) in row.iter().enumerate() {
@@ -133,6 +138,18 @@ fn render_minimap(
         MINIMAP_TILE_SIZE,
         MINIMAP_TILE_SIZE,
     ));
+
+    // Render other players
+canvas.set_draw_color(Color::RGB(0, 0, 255)); // Blue for other players
+for (_name, (pos, _rot)) in other_players.iter() {
+    let _ = canvas.fill_rect(Rect::new(
+        (pos.x as usize * MINIMAP_TILE_SIZE as usize) as i32,
+        (pos.y as usize * MINIMAP_TILE_SIZE as usize) as i32,
+        MINIMAP_TILE_SIZE,
+        MINIMAP_TILE_SIZE,
+    ));
+}
+
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -140,10 +157,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let username = prompt("Enter Name: ");
     let server_addr = prompt("Enter IP Address (example 127.0.0.1:2025): ");
+    let mut other_players: HashMap<String, (Position, Rotation)> = HashMap::new();
 
     let client = NetworkClient::new("0.0.0.0:0", &server_addr)?;
 
-    client.send(&ClientMessage::JoinGame { username })?;
+    client.send(&ClientMessage::JoinGame { username: username.clone() })?;
+
     println!("Waiting to join lobby...");
 
     let sdl_context = sdl2::init()?;
@@ -253,6 +272,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("Error: {}", message);
                     return Ok(());
                 }
+                ServerMessage::PlayerMove {
+                    player_id,
+                    position,
+                    rotation,
+                    ..
+                } => {
+                    if player_id != username {
+                        other_players.insert(player_id, (position, rotation));
+                    }
+                }
                 _ => {}
             }
         }
@@ -286,7 +315,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         if game_started {
             render_first_person_view(&mut canvas, &maze_map, &player);
-            render_minimap(&mut canvas, &maze_map, &player);
+            render_minimap(&mut canvas, &maze_map, &player, &other_players);
+
         }
 
         canvas.present();
