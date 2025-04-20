@@ -46,7 +46,7 @@ async fn main() {
         .unwrap();
 
     if let Err(e) = Server::new("0.0.0.0", 2025)
-        .min_players(1)
+        .min_players(2)
         .max_players(10)
         .start()
         .await
