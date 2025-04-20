@@ -1,9 +1,6 @@
-// src/net.rs
-use std::net::{ToSocketAddrs, UdpSocket};
-use std::time::Duration;
 use anyhow::Result;
-
-use crate::messages::{ClientMessage, ServerMessage};
+use shared::server::{ClientMessage, ServerMessage};
+use std::net::{ToSocketAddrs, UdpSocket};
 
 pub struct NetworkClient {
     socket: UdpSocket,

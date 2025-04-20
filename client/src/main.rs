@@ -1,20 +1,16 @@
 mod map;
-mod messages;
 mod net;
-use crate::map::{generate_maze, Tile, MAZE_WIDTH, MAZE_HEIGHT};
-use crate::messages::{ClientMessage, Position, Rotation, ServerMessage};
+
+use crate::map::{generate_maze, Tile, MAZE_HEIGHT, MAZE_WIDTH};
 use crate::net::NetworkClient;
 use std::io::{self, Write};
 use std::time::{Duration, Instant};
 
 use sdl2::{
-    event::Event, 
-    keyboard::Keycode, 
-    pixels::Color, 
-    rect::Rect,
-    render::Canvas,
-    video::Window
+    event::Event, keyboard::Keycode, pixels::Color, rect::Rect, render::Canvas, video::Window,
 };
+use shared::server::{ClientMessage, ServerMessage};
+use shared::{Position, Rotation};
 
 const SCREEN_WIDTH: u32 = 800;
 const SCREEN_HEIGHT: u32 = 600;
@@ -37,7 +33,11 @@ fn prompt(text: &str) -> String {
     buf.trim().to_string()
 }
 
-fn cast_ray(maze: &[[Tile; MAZE_WIDTH]; MAZE_HEIGHT], player: &Player3D, angle: f32) -> Option<(f32, f32)> {
+fn cast_ray(
+    maze: &[[Tile; MAZE_WIDTH]; MAZE_HEIGHT],
+    player: &Player3D,
+    angle: f32,
+) -> Option<(f32, f32)> {
     let mut x = player.x;
     let mut y = player.y;
     let dx = angle.cos();
@@ -61,39 +61,53 @@ fn cast_ray(maze: &[[Tile; MAZE_WIDTH]; MAZE_HEIGHT], player: &Player3D, angle: 
     None
 }
 
-fn render_first_person_view(canvas: &mut Canvas<Window>, maze: &[[Tile; MAZE_WIDTH]; MAZE_HEIGHT], player: &Player3D) {
+fn render_first_person_view(
+    canvas: &mut Canvas<Window>,
+    maze: &[[Tile; MAZE_WIDTH]; MAZE_HEIGHT],
+    player: &Player3D,
+) {
     canvas.set_draw_color(Color::RGB(135, 206, 235)); // Sky blue
-    canvas.fill_rect(Rect::new(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT / 2)).unwrap();
-    
+    canvas
+        .fill_rect(Rect::new(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT / 2))
+        .unwrap();
+
     canvas.set_draw_color(Color::RGB(50, 150, 50)); // Ground green
-    canvas.fill_rect(Rect::new(0, SCREEN_HEIGHT as i32 / 2, SCREEN_WIDTH, SCREEN_HEIGHT / 2)).unwrap();
+    canvas
+        .fill_rect(Rect::new(
+            0,
+            SCREEN_HEIGHT as i32 / 2,
+            SCREEN_WIDTH,
+            SCREEN_HEIGHT / 2,
+        ))
+        .unwrap();
 
     // Cast rays
     for x in 0..SCREEN_WIDTH {
         // Calculate ray angle
         let ray_angle = player.angle - FOV / 2.0 + (x as f32 / SCREEN_WIDTH as f32) * FOV;
-        
+
         if let Some((hit_x, hit_y)) = cast_ray(maze, player, ray_angle) {
             // Calculate distance to wall
             let distance = ((hit_x - player.x).powi(2) + (hit_y - player.y).powi(2)).sqrt();
-            
+
             // Calculate wall height based on distance
             let wall_height = (SCREEN_HEIGHT as f32 / distance).min(SCREEN_HEIGHT as f32);
-            
+
             // Draw wall slice
             let wall_top = (SCREEN_HEIGHT as f32 - wall_height) / 2.0;
             canvas.set_draw_color(Color::RGB(100, 100, 100)); // Gray wall color
-            canvas.fill_rect(Rect::new(
-                x as i32, 
-                wall_top as i32, 
-                1, 
-                wall_height as u32
-            )).unwrap();
+            canvas
+                .fill_rect(Rect::new(x as i32, wall_top as i32, 1, wall_height as u32))
+                .unwrap();
         }
     }
 }
 
-fn render_minimap(canvas: &mut Canvas<Window>, maze: &[[Tile; MAZE_WIDTH]; MAZE_HEIGHT], player: &Player3D) {
+fn render_minimap(
+    canvas: &mut Canvas<Window>,
+    maze: &[[Tile; MAZE_WIDTH]; MAZE_HEIGHT],
+    player: &Player3D,
+) {
     for (y, row) in maze.iter().enumerate() {
         for (x, tile) in row.iter().enumerate() {
             let color = match tile {
@@ -103,10 +117,10 @@ fn render_minimap(canvas: &mut Canvas<Window>, maze: &[[Tile; MAZE_WIDTH]; MAZE_
 
             canvas.set_draw_color(color);
             let _ = canvas.fill_rect(Rect::new(
-                (x * MINIMAP_TILE_SIZE as usize) as i32, 
-                (y * MINIMAP_TILE_SIZE as usize) as i32, 
-                MINIMAP_TILE_SIZE, 
-                MINIMAP_TILE_SIZE
+                (x * MINIMAP_TILE_SIZE as usize) as i32,
+                (y * MINIMAP_TILE_SIZE as usize) as i32,
+                MINIMAP_TILE_SIZE,
+                MINIMAP_TILE_SIZE,
             ));
         }
     }
@@ -114,10 +128,10 @@ fn render_minimap(canvas: &mut Canvas<Window>, maze: &[[Tile; MAZE_WIDTH]; MAZE_
     // Player marker
     canvas.set_draw_color(Color::RGB(255, 0, 0));
     let _ = canvas.fill_rect(Rect::new(
-        (player.x as usize * MINIMAP_TILE_SIZE as usize) as i32, 
-        (player.y as usize * MINIMAP_TILE_SIZE as usize) as i32, 
-        MINIMAP_TILE_SIZE, 
-        MINIMAP_TILE_SIZE
+        (player.x as usize * MINIMAP_TILE_SIZE as usize) as i32,
+        (player.y as usize * MINIMAP_TILE_SIZE as usize) as i32,
+        MINIMAP_TILE_SIZE,
+        MINIMAP_TILE_SIZE,
     ));
 }
 
@@ -146,7 +160,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut last_frame = Instant::now();
     let mut game_started = false;
 
-    let mut maze_map = generate_maze();
+    let maze_map = generate_maze();
     let mut player = Player3D {
         x: 1.5,
         y: 1.5,
@@ -164,41 +178,60 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
-                | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => {
                     running = false;
                 }
-                
-                Event::KeyDown { keycode: Some(Keycode::W), .. } if game_started => {
+
+                Event::KeyDown {
+                    keycode: Some(Keycode::W),
+                    ..
+                } if game_started => {
                     let new_x = player.x + player.angle.cos() * 0.1;
                     let new_y = player.y + player.angle.sin() * 0.1;
                     let grid_x = new_x as usize;
                     let grid_y = new_y as usize;
 
-                    if grid_x < MAZE_WIDTH && grid_y < MAZE_HEIGHT && 
-                       maze_map[grid_y][grid_x] != Tile::Wall {
+                    if grid_x < MAZE_WIDTH
+                        && grid_y < MAZE_HEIGHT
+                        && maze_map[grid_y][grid_x] != Tile::Wall
+                    {
                         player.x = new_x;
                         player.y = new_y;
                     }
                 }
-                Event::KeyDown { keycode: Some(Keycode::S), .. } if game_started => {
+                Event::KeyDown {
+                    keycode: Some(Keycode::S),
+                    ..
+                } if game_started => {
                     let new_x = player.x - player.angle.cos() * 0.1;
                     let new_y = player.y - player.angle.sin() * 0.1;
                     let grid_x = new_x as usize;
                     let grid_y = new_y as usize;
 
-                    if grid_x < MAZE_WIDTH && grid_y < MAZE_HEIGHT && 
-                       maze_map[grid_y][grid_x] != Tile::Wall {
+                    if grid_x < MAZE_WIDTH
+                        && grid_y < MAZE_HEIGHT
+                        && maze_map[grid_y][grid_x] != Tile::Wall
+                    {
                         player.x = new_x;
                         player.y = new_y;
                     }
                 }
-                Event::KeyDown { keycode: Some(Keycode::A), .. } if game_started => {
+                Event::KeyDown {
+                    keycode: Some(Keycode::A),
+                    ..
+                } if game_started => {
                     player.angle -= 0.1;
                 }
-                Event::KeyDown { keycode: Some(Keycode::D), .. } if game_started => {
+                Event::KeyDown {
+                    keycode: Some(Keycode::D),
+                    ..
+                } if game_started => {
                     player.angle += 0.1;
                 }
-                
+
                 _ => {}
             }
         }

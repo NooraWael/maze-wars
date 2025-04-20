@@ -1,7 +1,7 @@
 use bevy::math::{EulerRot, Quat};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
 /// Represents player's rotation/orientation in 3D space
 ///
 /// # Examples

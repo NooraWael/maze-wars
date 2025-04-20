@@ -1,7 +1,7 @@
 use bevy::math::Vec3;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
 /// Represents a 3D position in game world
 ///
 /// # Examples
