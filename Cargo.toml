@@ -2,5 +2,5 @@
 members = [
     "shared",
     "server",
-    "client2",
+    "client",
 ]
