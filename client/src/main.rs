@@ -390,6 +390,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         other_players.remove(&player_id);
                     }
                 }
+                ServerMessage::JoinGameError { message } => {
+                    println!("❌ Error: {}", message);
+                    running = false;
+                }
+                ServerMessage::Error { message } => {
+                    println!("❌ Error: {}", message);
+                    running = false;
+                }
+                ServerMessage::GameOver { winner } => {
+                    println!("🏆 Game Over! {} wins!", winner);
+                    running = false;
+                }
+                ServerMessage::PlayerSpawn { player_id, position } => {
+                    if player_id != username {
+                        other_players.insert(player_id, (position, Rotation::default()));
+                    }
+                }
+                ServerMessage::PlayersInLobby { player_count, players } => {
+                    println!("👥 Players in lobby: {}. Players: {:?}", player_count, players);
+                }
+                
             }
         }
 
