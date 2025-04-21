@@ -263,6 +263,7 @@ fn find_target_in_crosshair(
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
+
     let username = prompt("Enter Name: ");
     let server_addr = prompt("Enter IP Address (example 127.0.0.1:2025): ");
 
@@ -272,23 +273,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     })?;
 
     let sdl_context = sdl2::init()?;
+    let ttf_context = sdl2::ttf::init()?; // FONT INIT
     let video_subsystem = sdl_context.video()?;
+
     let window = video_subsystem
         .window("Maze Wars", SCREEN_WIDTH, SCREEN_HEIGHT)
         .position_centered()
         .build()?;
-    let mut canvas = window.into_canvas().build()?;
-    let mut event_pump = sdl_context.event_pump()?;
 
+    let mut canvas = window.into_canvas().build()?;
+    let texture_creator = canvas.texture_creator();
+
+    let mut event_pump = sdl_context.event_pump()?;
+    let font = ttf_context.load_font("assets/fonts/FiraSans-Bold.ttf", 64)?;
+
+    let maze_map = generate_maze();
     let mut player = Player3D {
         x: 1.5,
         y: 1.5,
         angle: 0.0,
     };
-    let maze_map = generate_maze();
 
     let mut running = true;
     let mut game_started = false;
+    let mut player_dead = false;
     let mut other_players: HashMap<String, (Position, Rotation)> = HashMap::new();
     let mut player_health = 100;
     let mut last_frame = Instant::now();
@@ -303,10 +311,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     keycode: Some(Keycode::Escape),
                     ..
                 } => running = false,
+
+                // Movement
                 Event::KeyDown {
                     keycode: Some(Keycode::W),
                     ..
-                } if game_started => {
+                } if game_started && !player_dead => {
                     let new_x = player.x + player.angle.cos() * 0.1;
                     let new_y = player.y + player.angle.sin() * 0.1;
                     if maze_map[new_y as usize][new_x as usize] != Tile::Wall {
@@ -317,7 +327,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Event::KeyDown {
                     keycode: Some(Keycode::S),
                     ..
-                } if game_started => {
+                } if game_started && !player_dead => {
                     let new_x = player.x - player.angle.cos() * 0.1;
                     let new_y = player.y - player.angle.sin() * 0.1;
                     if maze_map[new_y as usize][new_x as usize] != Tile::Wall {
@@ -328,19 +338,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Event::KeyDown {
                     keycode: Some(Keycode::A),
                     ..
-                } if game_started => {
+                } if game_started && !player_dead => {
                     player.angle -= 0.1;
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::D),
                     ..
-                } if game_started => {
+                } if game_started && !player_dead => {
                     player.angle += 0.1;
                 }
+
+                // Shooting
                 Event::KeyDown {
                     keycode: Some(Keycode::Space),
                     ..
-                } if game_started => {
+                } if game_started && !player_dead => {
                     if let Some((target, _)) = find_target_in_crosshair(&player, &other_players) {
                         client.send(&ClientMessage::ShotPlayer {
                             player_username: target,
@@ -369,6 +381,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         other_players.insert(player_id, (position, rotation));
                     }
                 }
+                ServerMessage::PlayerDeath { player_id, .. } => {
+                    if player_id == username {
+                        player_dead = true;
+                        println!("💀 You were killed!");
+                    } else {
+                        println!("⚰️ {} was eliminated!", player_id);
+                        other_players.remove(&player_id);
+                    }
+                }
                 _ => {}
             }
         }
@@ -383,7 +404,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             pitch: 0.0,
             roll: 0.0,
         };
-        if position != last_sent_position || rotation != last_sent_rotation {
+
+        if !player_dead && (position != last_sent_position || rotation != last_sent_rotation) {
             client.send(&ClientMessage::Move {
                 position,
                 rotation,
@@ -398,8 +420,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         if game_started {
             render_first_person_view(&mut canvas, &maze_map, &player, &other_players);
-            render_health_bar(&mut canvas, player_health);
-            render_minimap_below(&mut canvas, &maze_map, &player, &other_players);
+            if !player_dead {
+                render_health_bar(&mut canvas, player_health);
+                render_minimap_below(&mut canvas, &maze_map, &player, &other_players);
+            } else {
+                let surface = font.render("YOU DIED").blended(Color::RGB(255, 0, 0))?;
+                let texture = texture_creator.create_texture_from_surface(&surface)?;
+                let rect = Rect::new(250, 250, 300, 100);
+                canvas.copy(&texture, None, Some(rect))?;
+            }
         }
 
         canvas.present();
