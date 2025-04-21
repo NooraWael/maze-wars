@@ -146,9 +146,9 @@ impl Server {
         addr: SocketAddr,
         player_to_shoot: String,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let state = game_state.lock().await;
-        let shooter = match state.players.get(&addr) {
-            Some(p) => p,
+        let mut state = game_state.lock().await;
+        let shooter_username = match state.players.get(&addr) {
+            Some(p) => p.username.clone(),
             None => {
                 log::warn!("Shooter not found for address {}", addr);
                 return Ok(());
@@ -161,20 +161,46 @@ impl Server {
             .iter()
             .find(|(_, p)| p.username == player_to_shoot)
         {
-            Some((addr, _)) => addr,
+            Some((addr, _)) => *addr,
             None => {
                 log::warn!("Player to shoot not found: {}", player_to_shoot);
                 return Ok(());
             }
         };
 
-        let player_to_shoot = state.players.get(target_addr).unwrap();
+        // Extract the necessary information and update the player in a separate scope
+        let (target_username, target_health) = {
+            let target_player = state.players.get_mut(&target_addr).unwrap();
+            // Reduce health by 10, saturating at 0
+            target_player.health = target_player.health.saturating_sub(10);
+            (target_player.username.clone(), target_player.health)
+        };
 
         log::debug!(
-            "Player {} fired at {}",
-            shooter.username,
-            player_to_shoot.username
+            "Player {} fired at {} (new health: {})",
+            shooter_username,
+            target_username,
+            target_health
         );
+
+        // Emit HealthUpdate to all players
+        let health_update = ServerMessage::HealthUpdate {
+            player_id: target_username.clone(),
+            health: target_health,
+        };
+        self.broadcast_message(&socket, health_update, &state.players)
+            .await?;
+
+        // If health reaches 0, emit PlayerDeath to all players
+        if target_health == 0 {
+            let death_message = ServerMessage::PlayerDeath {
+                player_id: target_username,
+                killer_id: Some(shooter_username),
+            };
+            self.broadcast_message(&socket, death_message, &state.players)
+                .await?;
+        }
+
         Ok(())
     }
 }
