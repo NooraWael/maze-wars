@@ -15,7 +15,9 @@ pub enum ServerMessage {
         player_count: u32,
         players: Vec<String>,
     },
-    GameStart,
+    GameStart {
+        maze_level: u8, 
+    },
     PlayerMove {
         player_id: String,
         position: Position,

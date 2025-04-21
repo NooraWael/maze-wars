@@ -68,7 +68,9 @@ impl Server {
             state.game_start_time = Some(Instant::now());
 
             // Inform players about the timer
-            let info_message = ServerMessage::GameStart;
+            let info_message = ServerMessage::GameStart {
+                maze_level: state.maze_level,
+            };
             self.broadcast_message(&socket, info_message, &state.players)
                 .await?;
         }

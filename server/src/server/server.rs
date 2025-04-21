@@ -121,7 +121,9 @@ impl Server {
                             log::info!("Game starting after 5 second countdown!");
 
                             // Send game start message to all players
-                            let message = ServerMessage::GameStart;
+                            let message = ServerMessage::GameStart {
+                                maze_level: state.maze_level,
+                            };
                             if let Err(e) = Self::broadcast_message_static(
                                 &socket_timer,
                                 message,

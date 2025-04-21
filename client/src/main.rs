@@ -1,8 +1,9 @@
 mod map;
 mod net;
 
-use crate::map::{generate_maze, Tile, MAZE_HEIGHT, MAZE_WIDTH};
+use crate::map::{generate_maze_level, MazeLevel, MazeMap, Tile, MAZE_HEIGHT, MAZE_WIDTH};
 use crate::net::NetworkClient;
+use map::{level_1, level_2, level_3, SpawnPoints};
 use sdl2::{
     event::Event, keyboard::Keycode, pixels::Color, rect::Rect, render::Canvas, video::Window,
 };
@@ -273,7 +274,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     })?;
 
     let sdl_context = sdl2::init()?;
-    let ttf_context = sdl2::ttf::init()?; // FONT INIT
+    let ttf_context = sdl2::ttf::init()?;
     let video_subsystem = sdl_context.video()?;
 
     let window = video_subsystem
@@ -283,11 +284,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut canvas = window.into_canvas().build()?;
     let texture_creator = canvas.texture_creator();
-
     let mut event_pump = sdl_context.event_pump()?;
     let font = ttf_context.load_font("assets/fonts/FiraSans-Bold.ttf", 64)?;
 
-    let maze_map = generate_maze();
+    let mut maze_map = [[Tile::Wall; MAZE_WIDTH]; MAZE_HEIGHT];
+    let mut spawns: SpawnPoints = Vec::new();
+    let mut maze_level = 1;
+
     let mut player = Player3D {
         x: 1.5,
         y: 1.5,
@@ -297,8 +300,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut running = true;
     let mut game_started = false;
     let mut player_dead = false;
-    let mut other_players: HashMap<String, (Position, Rotation)> = HashMap::new();
+    let mut spawn_assigned = false;
     let mut player_health = 100;
+    let mut other_players: HashMap<String, (Position, Rotation)> = HashMap::new();
     let mut last_frame = Instant::now();
     let mut last_sent_position = Position::default();
     let mut last_sent_rotation = Rotation::default();
@@ -312,7 +316,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ..
                 } => running = false,
 
-                // Movement
                 Event::KeyDown {
                     keycode: Some(Keycode::W),
                     ..
@@ -347,8 +350,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 } if game_started && !player_dead => {
                     player.angle += 0.1;
                 }
-
-                // Shooting
                 Event::KeyDown {
                     keycode: Some(Keycode::Space),
                     ..
@@ -365,7 +366,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         if let Some(msg) = client.try_receive() {
             match msg {
-                ServerMessage::GameStart => game_started = true,
+                ServerMessage::GameStart { maze_level: level } => {
+                    game_started = true;
+                    maze_level = level;
+                    
+                    // Generate the specific level
+                    let level = match maze_level {
+                        1 => level_1(),
+                        2 => level_2(),
+                        3 => level_3(),
+                        _ => level_1(),
+                    };
+                    
+                    maze_map = level.map;
+                    spawns = level.spawns;
+                    
+                    println!("🎮 Game starting with maze level {}", maze_level);
+                },
                 ServerMessage::HealthUpdate { player_id, health } => {
                     if player_id == username {
                         player_health = health;
@@ -390,11 +407,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         other_players.remove(&player_id);
                     }
                 }
-                ServerMessage::JoinGameError { message } => {
-                    println!("❌ Error: {}", message);
-                    running = false;
-                }
-                ServerMessage::Error { message } => {
+                ServerMessage::JoinGameError { message } | ServerMessage::Error { message } => {
                     println!("❌ Error: {}", message);
                     running = false;
                 }
@@ -402,15 +415,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("🏆 Game Over! {} wins!", winner);
                     running = false;
                 }
-                ServerMessage::PlayerSpawn { player_id, position } => {
-                    if player_id != username {
-                        other_players.insert(player_id, (position, Rotation::default()));
+                ServerMessage::PlayersInLobby {
+                    player_count,
+                    players,
+                } => {
+                    println!("👥 Players in lobby: {}. {:?}", player_count, players);
+
+                    if !spawn_assigned {
+                        if let Some(index) = players.iter().position(|p| p == &username) {
+                            if index < spawns.len() {
+                                let (x, y) = spawns[index];
+                                player.x = x;
+                                player.y = y;
+                                spawn_assigned = true;
+
+                                client.send(&ClientMessage::Move {
+                                    position: Position {
+                                        x: player.x,
+                                        y: player.y,
+                                        z: 0.0,
+                                    },
+                                    rotation: Rotation {
+                                        yaw: player.angle.to_degrees(),
+                                        pitch: 0.0,
+                                        roll: 0.0,
+                                    },
+                                    yield_control: 0.5,
+                                })?;
+                            } else {
+                                println!("⚠️ No spawn available for player index {}", index);
+                            }
+                        }
                     }
                 }
-                ServerMessage::PlayersInLobby { player_count, players } => {
-                    println!("👥 Players in lobby: {}. Players: {:?}", player_count, players);
-                }
-                
+                _ => {}
             }
         }
 
