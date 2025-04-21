@@ -261,6 +261,7 @@ fn find_target_in_crosshair(
 
     best_target
 }
+// Update the main function to include game over state handling
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
@@ -286,6 +287,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let texture_creator = canvas.texture_creator();
     let mut event_pump = sdl_context.event_pump()?;
     let font = ttf_context.load_font("assets/fonts/FiraSans-Bold.ttf", 64)?;
+    let small_font = ttf_context.load_font("assets/fonts/FiraSans-Bold.ttf", 32)?;
 
     let mut maze_map = [[Tile::Wall; MAZE_WIDTH]; MAZE_HEIGHT];
     let mut spawns: SpawnPoints = Vec::new();
@@ -300,6 +302,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut running = true;
     let mut game_started = false;
     let mut player_dead = false;
+    let mut game_over = false;
+    let mut winner_name = String::new();
     let mut spawn_assigned = false;
     let mut player_health = 100;
     let mut other_players: HashMap<String, (Position, Rotation)> = HashMap::new();
@@ -310,16 +314,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     while running {
         for event in event_pump.poll_iter() {
             match event {
-                Event::Quit { .. }
-                | Event::KeyDown {
+                Event::Quit { .. } => running = false,
+                Event::KeyDown {
                     keycode: Some(Keycode::Escape),
                     ..
                 } => running = false,
-
+                Event::KeyDown {
+                    keycode: Some(keycode),
+                    ..
+                } if game_over => {
+                    // Any key press on game over screen exits the game
+                    if keycode == Keycode::Return || keycode == Keycode::Space || keycode == Keycode::Escape {
+                        running = false;
+                    }
+                },
                 Event::KeyDown {
                     keycode: Some(Keycode::W),
                     ..
-                } if game_started && !player_dead => {
+                } if game_started && !player_dead && !game_over => {
                     let new_x = player.x + player.angle.cos() * 0.1;
                     let new_y = player.y + player.angle.sin() * 0.1;
                     if maze_map[new_y as usize][new_x as usize] != Tile::Wall {
@@ -330,7 +342,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Event::KeyDown {
                     keycode: Some(Keycode::S),
                     ..
-                } if game_started && !player_dead => {
+                } if game_started && !player_dead && !game_over => {
                     let new_x = player.x - player.angle.cos() * 0.1;
                     let new_y = player.y - player.angle.sin() * 0.1;
                     if maze_map[new_y as usize][new_x as usize] != Tile::Wall {
@@ -341,19 +353,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Event::KeyDown {
                     keycode: Some(Keycode::A),
                     ..
-                } if game_started && !player_dead => {
+                } if game_started && !player_dead && !game_over => {
                     player.angle -= 0.1;
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::D),
                     ..
-                } if game_started && !player_dead => {
+                } if game_started && !player_dead && !game_over => {
                     player.angle += 0.1;
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Space),
                     ..
-                } if game_started && !player_dead => {
+                } if game_started && !player_dead && !game_over => {
                     if let Some((target, _)) = find_target_in_crosshair(&player, &other_players) {
                         client.send(&ClientMessage::ShotPlayer {
                             player_username: target,
@@ -412,8 +424,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     running = false;
                 }
                 ServerMessage::GameOver { winner } => {
+                    game_over = true;
+                    winner_name = winner.clone();
                     println!("🏆 Game Over! {} wins!", winner);
-                    running = false;
                 }
                 ServerMessage::PlayersInLobby {
                     player_count,
@@ -421,7 +434,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 } => {
                     println!("👥 Players in lobby: {}. {:?}", player_count, players);
 
-                    if !spawn_assigned {
+                    if !spawn_assigned && game_started {
                         if let Some(index) = players.iter().position(|p| p == &username) {
                             if index < spawns.len() {
                                 let (x, y) = spawns[index];
@@ -463,7 +476,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             roll: 0.0,
         };
 
-        if !player_dead && (position != last_sent_position || rotation != last_sent_rotation) {
+        if !player_dead && !game_over && (position != last_sent_position || rotation != last_sent_rotation) {
             client.send(&ClientMessage::Move {
                 position,
                 rotation,
@@ -476,7 +489,52 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         canvas.set_draw_color(Color::RGB(30, 30, 30));
         canvas.clear();
 
-        if game_started {
+        if game_over {
+            // Render game over screen
+            let game_over_surface = font.render("GAME OVER").blended(Color::RGB(255, 255, 0))?;
+            let game_over_texture = texture_creator.create_texture_from_surface(&game_over_surface)?;
+            let game_over_rect = Rect::new(250, 200, 300, 100);
+            canvas.copy(&game_over_texture, None, Some(game_over_rect))?;
+            
+            // Show winner
+            let winner_text = format!("{} Wins!", winner_name);
+            let winner_surface = small_font.render(&winner_text).blended(Color::RGB(255, 255, 255))?;
+            let winner_texture = texture_creator.create_texture_from_surface(&winner_surface)?;
+            let winner_text_width = winner_surface.width();
+            let winner_rect = Rect::new(
+                (SCREEN_WIDTH - winner_text_width) as i32 / 2, 
+                320, 
+                winner_text_width, 
+                40
+            );
+            canvas.copy(&winner_texture, None, Some(winner_rect))?;
+            
+            // Show instruction to exit
+            let exit_surface = small_font.render("Press ENTER, SPACE or ESC to exit").blended(Color::RGB(200, 200, 200))?;
+            let exit_texture = texture_creator.create_texture_from_surface(&exit_surface)?;
+            let exit_text_width = exit_surface.width();
+            let exit_rect = Rect::new(
+                (SCREEN_WIDTH - exit_text_width) as i32 / 2, 
+                400, 
+                exit_text_width, 
+                40
+            );
+            canvas.copy(&exit_texture, None, Some(exit_rect))?;
+            
+            // If you won, show congratulatory message
+            if winner_name == username {
+                let congrats_surface = small_font.render("Congratulations!").blended(Color::RGB(0, 255, 0))?;
+                let congrats_texture = texture_creator.create_texture_from_surface(&congrats_surface)?;
+                let congrats_text_width = congrats_surface.width();
+                let congrats_rect = Rect::new(
+                    (SCREEN_WIDTH - congrats_text_width) as i32 / 2, 
+                    360, 
+                    congrats_text_width, 
+                    40
+                );
+                canvas.copy(&congrats_texture, None, Some(congrats_rect))?;
+            }
+        } else if game_started {
             render_first_person_view(&mut canvas, &maze_map, &player, &other_players);
             if !player_dead {
                 render_health_bar(&mut canvas, player_health);
