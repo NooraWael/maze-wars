@@ -390,7 +390,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         other_players.remove(&player_id);
                     }
                 }
-                _ => {}
             }
         }
 

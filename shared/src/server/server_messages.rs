@@ -35,4 +35,7 @@ pub enum ServerMessage {
         player_id: String,
         health: u32,
     },
+    GameOver {
+        winner: String,
+    },
 }

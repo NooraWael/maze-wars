@@ -200,6 +200,17 @@ impl Server {
             self.broadcast_message(&socket, death_message, &state.players)
                 .await?;
         }
+        // If one player is left alive, emit GameOver
+        // Count alive players (health > 0)
+        let alive_players: Vec<_> = state.players.values().filter(|p| p.health > 0).collect();
+
+        // If only one player is alive, emit GameOver
+        if alive_players.len() == 1 {
+            let winner = alive_players[0].username.clone();
+            let game_over_message = ServerMessage::GameOver { winner };
+            self.broadcast_message(&socket, game_over_message, &state.players)
+                .await?;
+        }
 
         Ok(())
     }
